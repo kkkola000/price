@@ -258,7 +258,8 @@ body.nophoto .thumb{display:none}
     <section class="pane active" id="pane-feed">
       <label class="f">Ссылка на YML (прайс-лист)</label>
       <div class="row">
-        <input type="url" id="ymlUrl" class="grow" autocomplete="off" placeholder="https://site.ru/price.yml">
+        <input type="url" id="ymlUrl" class="grow" autocomplete="off" value="https://anex-online.kz/tstore/yml/481833e6473b397975a9cff472bbd105.yml"
+               placeholder="https://site.ru/price.yml">
         <button class="btn primary" id="loadUrl">Загрузить</button>
       </div>
 
@@ -484,6 +485,9 @@ const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const uid = () => Math.random().toString(36).slice(2, 9);
 const esc = s => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/* Прайс, который подставляется в поле при открытии панели и подтягивается сам. */
+const DEFAULT_YML = 'https://anex-online.kz/tstore/yml/481833e6473b397975a9cff472bbd105.yml';
 
 const LS_STATE = 'pricePanel.v1.state';
 const LS_SAVES = 'pricePanel.v1.saves';
@@ -1533,7 +1537,7 @@ function syncControls() {
   $('#showPhoto').checked = st.showPhoto;
   $('#showDots').checked = st.showDots;
   $('#cur').value = st.cur;
-  $('#ymlUrl').value = S.yml.url || '';
+  $('#ymlUrl').value = S.yml.url || DEFAULT_YML;
   $('#proxy').value = S.yml.proxy || '';
   $('#proxyCustom').value = S.yml.proxyCustom || '';
   $('#proxyCustom').style.display = S.yml.proxy === 'custom' ? 'block' : 'none';
@@ -1542,15 +1546,18 @@ function syncControls() {
 load();
 /* Браузер сам восстанавливает значения полей при перезагрузке — чистим вручную,
    иначе ссылка на прайс и запрос остались бы на экране. */
-['#ymlUrl', '#ymlPaste', '#proxyCustom', '#q', '#saveName', '#ymlFile'].forEach(sel => {
+['#ymlPaste', '#proxyCustom', '#q', '#saveName', '#ymlFile'].forEach(sel => {
   const el = $(sel); if (el) el.value = '';
 });
+$('#ymlUrl').value = DEFAULT_YML;
 syncControls();
 applyGeometry();
 renderSheet();
 renderSaves();
 setCatInfo();
 doSearch();
+// прайс по умолчанию подтягиваем сразу и открываем каталог
+fetchYml(DEFAULT_YML, true).then(ok => { if (ok) goTab('catalog'); });
 </script>
 </body>
 </html>
