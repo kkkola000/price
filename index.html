@@ -1,0 +1,1137 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Панель ценников — печать по шаблону из YML</title>
+<style>
+/* ============================== БАЗА ============================== */
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#f4f5f7; --panel:#fff; --line:#d9dce1; --line2:#e9ebef;
+  --text:#16181d; --muted:#6b7280; --accent:#2563eb; --accent-d:#1d4ed8;
+  --ok:#16a34a; --warn:#d97706; --err:#dc2626; --ph:#dcdcdc;
+  --radius:8px;
+}
+html,body{height:100%}
+body{
+  margin:0; background:var(--bg); color:var(--text);
+  font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+.btn{
+  border:1px solid var(--line); background:#fff; border-radius:6px;
+  padding:6px 10px; transition:.12s background,.12s border-color;
+}
+.btn:hover{background:#f3f4f6}
+.btn:active{background:#e9ebef}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:var(--accent-d);border-color:var(--accent-d)}
+.btn.ghost{border-color:transparent;background:transparent}
+.btn.ghost:hover{background:#eef0f3}
+.btn.sm{padding:3px 7px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+input[type=text],input[type=url],input[type=number],select,textarea{
+  border:1px solid var(--line); border-radius:6px; padding:6px 8px; background:#fff; width:100%;
+}
+input:focus,select:focus,textarea:focus{outline:2px solid #bfdbfe;outline-offset:-1px;border-color:var(--accent)}
+label.f{display:block;font-size:12px;color:var(--muted);margin:0 0 3px}
+.row{display:flex;gap:8px;align-items:center}
+.row.wrap{flex-wrap:wrap}
+.grow{flex:1;min-width:0}
+.hint{font-size:12px;color:var(--muted)}
+.sep{height:1px;background:var(--line2);margin:12px 0}
+
+/* ============================== КАРКАС ============================== */
+#app{display:flex;height:100vh;overflow:hidden}
+#side{
+  width:390px;min-width:390px;background:var(--panel);border-right:1px solid var(--line);
+  display:flex;flex-direction:column;overflow:hidden
+}
+#side header{padding:12px 14px;border-bottom:1px solid var(--line2)}
+#side h1{margin:0;font-size:15px;font-weight:650}
+#side h1 span{font-weight:400;color:var(--muted);font-size:12px;display:block;margin-top:2px}
+.tabs{display:flex;gap:4px;padding:8px 10px 0;border-bottom:1px solid var(--line2)}
+.tab{
+  border:1px solid transparent;border-bottom:none;background:transparent;padding:6px 10px;
+  border-radius:6px 6px 0 0;font-size:13px;color:var(--muted);position:relative;top:1px
+}
+.tab.active{background:#fff;border-color:var(--line2);color:var(--text);font-weight:600}
+.pane{display:none;padding:12px 14px;overflow:auto;flex:1}
+.pane.active{display:block}
+#stage{flex:1;overflow:auto;padding:24px;display:flex;flex-direction:column;align-items:center;gap:14px}
+#toolbar{
+  position:sticky;top:0;z-index:5;background:var(--bg);padding:0 0 4px;
+  display:flex;gap:8px;align-items:center;flex-wrap:wrap;width:100%;max-width:1120px
+}
+
+/* ============================== КАТАЛОГ ============================== */
+.status{font-size:12px;padding:6px 8px;border-radius:6px;background:#f3f4f6;color:var(--muted)}
+.status.ok{background:#ecfdf5;color:#166534}
+.status.err{background:#fef2f2;color:#991b1b}
+.status.warn{background:#fffbeb;color:#92400e}
+#results{margin-top:10px;display:flex;flex-direction:column;gap:6px}
+.hit{
+  display:flex;gap:8px;align-items:center;padding:6px;border:1px solid var(--line2);
+  border-radius:var(--radius);background:#fff
+}
+.hit:hover{border-color:#bfdbfe;background:#f8fbff}
+.hit img,.hit .noimg{
+  width:44px;height:44px;object-fit:contain;background:#f3f4f6;border-radius:4px;flex:none
+}
+.hit .noimg{display:flex;align-items:center;justify-content:center;font-size:9px;color:#9ca3af}
+.hit .t{flex:1;min-width:0}
+.hit .n{font-size:12.5px;line-height:1.3;max-height:34px;overflow:hidden}
+.hit .m{font-size:11px;color:var(--muted);margin-top:2px}
+.hit .p{font-weight:650;font-size:13px;white-space:nowrap}
+.hit .add{flex:none}
+
+/* ============================== ЛИСТ ============================== */
+.sheet-wrap{
+  /* размеры выставляет JS через --sw/--sh (мм) и --zoom */
+  width:calc(var(--sw) * var(--zoom));
+  height:calc(var(--sh) * var(--zoom));
+  flex:none;
+}
+#sheet{
+  width:var(--sw);height:var(--sh);background:#fff;position:relative;
+  box-shadow:0 2px 14px rgba(0,0,0,.16);
+  transform:scale(var(--zoom));transform-origin:top left;
+}
+/* линия сгиба / граница второй половины */
+#sheet .fold{position:absolute;border:0;border-style:dashed;border-color:#c8ccd2;pointer-events:none}
+#sheet .fold.v{top:0;bottom:0;border-left-width:1px}
+#sheet .fold.h{left:0;right:0;border-top-width:1px}
+.halfmark{
+  position:absolute;color:#c2c6cc;font-size:3.2mm;letter-spacing:.4mm;
+  pointer-events:none;user-select:none
+}
+
+/* панель — рабочая половина листа */
+#panel{
+  position:absolute;overflow:hidden;
+  display:flex;flex-direction:column;
+  padding:var(--pad);font-family:Arial,"Helvetica Neue",Helvetica,sans-serif;color:#000;
+}
+#panel.overflow{outline:1.2mm solid rgba(220,38,38,.5);outline-offset:-1.2mm}
+
+/* шапка */
+.p-head{text-align:center;flex:none}
+.p-title{
+  font-size:calc(var(--fs) * 1.5);font-weight:700;line-height:1.15;
+  min-height:1em;margin:0 0 1mm
+}
+.p-sub{font-size:calc(var(--fs) * .85);color:#444;min-height:1em}
+
+/* главный товар */
+.main-block{flex:none;text-align:center;margin:2mm 0 1mm}
+.main-photo{
+  width:var(--mainw);aspect-ratio:3/4;margin:0 auto;background:var(--ph);
+  display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative
+}
+.main-photo img{width:100%;height:100%;object-fit:contain;background:#fff}
+.main-photo .ph{font-size:3.4mm;color:#555;letter-spacing:.3mm}
+.main-line{
+  display:flex;align-items:baseline;gap:2mm;margin-top:2.5mm;
+  font-size:calc(var(--fs) * 1.12);font-weight:600
+}
+.main-line .nm{text-align:left;flex:0 1 auto}
+.main-line .dots{flex:1;border-bottom:.3mm dotted #999;transform:translateY(-1mm)}
+.main-line .pr{white-space:nowrap;font-weight:700}
+body.nodots .dots{border-bottom:none}
+
+/* список позиций */
+.p-body{flex:1;min-height:0;display:flex;flex-direction:column;gap:var(--gap)}
+.blk{position:relative}
+.blk.section .s-title{
+  font-size:calc(var(--fs) * 1.02);font-weight:700;text-transform:uppercase;
+  letter-spacing:.2mm;border-bottom:.4mm solid #000;padding-bottom:.8mm;margin-top:1mm;
+  min-height:1.1em
+}
+.blk.item{display:flex;align-items:center;gap:var(--gap)}
+.thumb{
+  width:var(--thumb);height:var(--thumb);flex:none;background:var(--ph);
+  display:flex;align-items:center;justify-content:center;overflow:hidden
+}
+.thumb img{width:100%;height:100%;object-fit:contain;background:#fff}
+.thumb .ph{font-size:2.2mm;color:#666}
+body.nophoto .thumb{display:none}
+.i-main{flex:1;min-width:0;display:flex;align-items:baseline;gap:1.5mm}
+.i-name{font-size:var(--fs);line-height:1.2;flex:0 1 auto;word-break:break-word}
+.i-dots{flex:1;border-bottom:.3mm dotted #999;transform:translateY(-1mm);min-width:4mm}
+.i-price{font-size:var(--fs);font-weight:700;white-space:nowrap}
+.i-note{font-size:calc(var(--fs) * .78);color:#555;line-height:1.15;margin-top:.4mm}
+.blk.spacer{height:var(--fs)}
+.p-foot{flex:none;font-size:calc(var(--fs) * .78);color:#333;text-align:center;padding-top:1.5mm;min-height:1em}
+
+/* редактирование прямо на листе */
+[contenteditable]{outline:none}
+[contenteditable]:empty::before{content:attr(data-ph);color:#9aa0a6}
+@media screen{
+  [contenteditable]:hover{background:#eef4ff;box-shadow:0 0 0 .3mm #dbeafe}
+  [contenteditable]:focus{background:#e8f0ff;box-shadow:0 0 0 .3mm #93c5fd}
+}
+.ctrls{
+  position:absolute;right:-1mm;top:50%;transform:translate(100%,-50%);
+  display:none;gap:2px;background:#fff;border:1px solid var(--line);border-radius:5px;
+  padding:2px;box-shadow:0 1px 6px rgba(0,0,0,.12);z-index:3
+}
+.blk:hover>.ctrls,.main-block:hover>.ctrls{display:flex}
+.ctrls button{
+  border:0;background:transparent;border-radius:4px;width:22px;height:22px;line-height:1;
+  font-size:13px;color:#374151
+}
+.ctrls button:hover{background:#eef0f3}
+.ctrls button.del:hover{background:#fee2e2;color:#b91c1c}
+.addbar{display:flex;gap:6px;margin-top:2mm;flex:none}
+.addbtn{
+  width:9mm;height:7mm;background:var(--ph);border:0;border-radius:1mm;
+  font-size:5mm;line-height:1;color:#111;display:flex;align-items:center;justify-content:center
+}
+.addbtn:hover{background:#c9c9c9}
+.addbar .lbl{font-size:3mm;color:#8a8f96;align-self:center}
+.drop{outline:.6mm dashed var(--accent);outline-offset:-.6mm}
+.blk.dragging{opacity:.4}
+
+/* предупреждение о переполнении */
+#overflowMsg{
+  display:none;max-width:1120px;width:100%;
+  background:#fef2f2;border:1px solid #fecaca;color:#991b1b;
+  padding:8px 12px;border-radius:var(--radius);font-size:13px
+}
+#overflowMsg.on{display:block}
+
+/* ============================== ПЕЧАТЬ ============================== */
+@media print{
+  #side,#toolbar,#overflowMsg,.ctrls,.addbar,.halfmark{display:none !important}
+  body{background:#fff}
+  #app{display:block;height:auto;overflow:visible}
+  #stage{padding:0;display:block;overflow:visible}
+  .sheet-wrap{width:auto !important;height:auto !important}
+  #sheet{
+    transform:none !important;box-shadow:none !important;
+    width:var(--sw);height:var(--sh);margin:0
+  }
+  #panel.overflow{outline:none}
+  #sheet .fold{display:var(--foldprint,none)}
+  [contenteditable]:empty::before{content:"" !important}
+  .thumb,.main-photo{background:var(--ph)}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- =========================== БОКОВАЯ ПАНЕЛЬ =========================== -->
+  <aside id="side">
+    <header>
+      <h1>Панель ценников<span>Печать по шаблону · цены из YML</span></h1>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="catalog">Каталог</button>
+      <button class="tab" data-tab="sheet">Лист</button>
+      <button class="tab" data-tab="saves">Шаблоны</button>
+    </nav>
+
+    <!-- ---------- Каталог ---------- -->
+    <section class="pane active" id="pane-catalog">
+      <label class="f">Ссылка на YML (прайс-лист)</label>
+      <div class="row">
+        <input type="url" id="ymlUrl" class="grow" placeholder="https://site.ru/price.yml">
+        <button class="btn primary" id="loadUrl">Загрузить</button>
+      </div>
+
+      <div class="row" style="margin-top:6px">
+        <select id="proxy" class="grow" title="Обход CORS">
+          <option value="">Без прокси (прямой запрос)</option>
+          <option value="https://api.allorigins.win/raw?url=">allorigins.win</option>
+          <option value="https://corsproxy.io/?url=">corsproxy.io</option>
+          <option value="https://r.jina.ai/">r.jina.ai</option>
+          <option value="custom">Свой прокси…</option>
+        </select>
+      </div>
+      <input type="url" id="proxyCustom" placeholder="https://my-proxy/?url=" style="margin-top:6px;display:none">
+      <div class="hint" style="margin-top:6px">
+        Если сайт не отдаёт CORS-заголовки, браузер заблокирует прямой запрос — выберите прокси
+        либо загрузите файл вручную.
+      </div>
+
+      <div class="row" style="margin-top:8px">
+        <input type="file" id="ymlFile" accept=".yml,.xml,.yaml,text/xml" class="grow">
+      </div>
+      <details style="margin-top:8px">
+        <summary class="hint" style="cursor:pointer">Вставить XML текстом</summary>
+        <textarea id="ymlPaste" rows="4" placeholder="&lt;yml_catalog&gt;…" style="margin-top:6px"></textarea>
+        <button class="btn sm" id="loadPaste" style="margin-top:6px">Разобрать</button>
+      </details>
+
+      <div id="status" class="status" style="margin-top:10px">Каталог не загружен</div>
+
+      <div class="sep"></div>
+
+      <label class="f">Поиск товара (название, артикул, id)</label>
+      <input type="text" id="q" placeholder="Введите минимум 2 символа…">
+      <div class="row" style="margin-top:6px">
+        <select id="catFilter" class="grow"><option value="">Все категории</option></select>
+      </div>
+      <div class="hint" style="margin-top:6px">
+        Левый клик по карточке — добавить в список. Кнопка «★» — сделать основным товаром.
+      </div>
+      <div id="results"></div>
+    </section>
+
+    <!-- ---------- Лист ---------- -->
+    <section class="pane" id="pane-sheet">
+      <label class="f">Ориентация листа и рабочая половина</label>
+      <div class="row">
+        <select id="half" class="grow">
+          <option value="left">A4 альбомная — левая половина</option>
+          <option value="right">A4 альбомная — правая половина</option>
+          <option value="top">A4 книжная — верхняя половина</option>
+          <option value="bottom">A4 книжная — нижняя половина</option>
+        </select>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <label class="hint" style="display:flex;gap:6px;align-items:center">
+          <input type="checkbox" id="foldPrint" style="width:auto"> печатать линию сгиба
+        </label>
+      </div>
+
+      <div class="sep"></div>
+
+      <label class="f">Размер шрифта: <b id="fsVal">3.6</b> мм</label>
+      <input type="range" id="fs" min="2.4" max="6" step="0.1" value="3.6" style="width:100%;padding:0">
+      <label class="f" style="margin-top:8px">Поля панели: <b id="padVal">8</b> мм</label>
+      <input type="range" id="pad" min="3" max="20" step="0.5" value="8" style="width:100%;padding:0">
+      <label class="f" style="margin-top:8px">Интервал между строками: <b id="gapVal">2.5</b> мм</label>
+      <input type="range" id="gap" min="0.5" max="8" step="0.5" value="2.5" style="width:100%;padding:0">
+      <label class="f" style="margin-top:8px">Миниатюра товара: <b id="thVal">12</b> мм</label>
+      <input type="range" id="th" min="6" max="28" step="1" value="12" style="width:100%;padding:0">
+      <label class="f" style="margin-top:8px">Фото основного товара: <b id="mwVal">45</b> мм</label>
+      <input type="range" id="mw" min="20" max="110" step="1" value="45" style="width:100%;padding:0">
+
+      <div class="sep"></div>
+      <div class="row wrap">
+        <label class="hint" style="display:flex;gap:6px;align-items:center">
+          <input type="checkbox" id="showPhoto" checked style="width:auto"> миниатюры
+        </label>
+        <label class="hint" style="display:flex;gap:6px;align-items:center">
+          <input type="checkbox" id="showDots" checked style="width:auto"> точки-выноски
+        </label>
+      </div>
+
+      <div class="sep"></div>
+      <label class="f">Валюта на листе</label>
+      <select id="cur">
+        <option value="auto">Как в YML</option>
+        <option value="₽">₽ рубль</option>
+        <option value="₸">₸ тенге</option>
+        <option value="$">$ доллар</option>
+        <option value="€">€ евро</option>
+        <option value="">без символа</option>
+      </select>
+
+      <div class="sep"></div>
+      <button class="btn grow" id="refreshPrices" style="width:100%">Обновить цены из YML</button>
+      <div class="hint" style="margin-top:6px">
+        Обновляются позиции, добавленные из каталога (у них сохранён id оффера).
+      </div>
+    </section>
+
+    <!-- ---------- Шаблоны ---------- -->
+    <section class="pane" id="pane-saves">
+      <label class="f">Сохранить текущий лист как шаблон</label>
+      <div class="row">
+        <input type="text" id="saveName" class="grow" placeholder="Название шаблона">
+        <button class="btn primary" id="doSave">Сохранить</button>
+      </div>
+      <div id="saveList" style="margin-top:10px;display:flex;flex-direction:column;gap:6px"></div>
+      <div class="sep"></div>
+      <div class="row wrap">
+        <button class="btn" id="exportJson">Экспорт в файл</button>
+        <button class="btn" id="importJson">Импорт из файла</button>
+        <input type="file" id="importFile" accept="application/json,.json" style="display:none">
+      </div>
+      <div class="sep"></div>
+      <button class="btn" id="clearAll" style="width:100%;color:#b91c1c">Очистить лист</button>
+      <div class="hint" style="margin-top:10px">
+        Всё хранится в браузере (localStorage). Файл можно скопировать на флешку и открыть
+        на другом компьютере — установка и сервер не нужны.
+      </div>
+    </section>
+  </aside>
+
+  <!-- =========================== ЛИСТ =========================== -->
+  <main id="stage">
+    <div id="toolbar">
+      <button class="btn primary" id="print">🖨 Печать / PDF</button>
+      <button class="btn" id="addItemTop">+ Позиция</button>
+      <button class="btn" id="addSectionTop">+ Раздел</button>
+      <span class="grow"></span>
+      <span class="hint">Масштаб</span>
+      <button class="btn sm" id="zoomOut">−</button>
+      <span class="hint" id="zoomVal" style="min-width:44px;text-align:center">100%</span>
+      <button class="btn sm" id="zoomIn">+</button>
+      <button class="btn sm" id="zoomFit">по окну</button>
+    </div>
+
+    <div id="overflowMsg">
+      ⚠ Содержимое не помещается на половину листа A4. Уменьшите шрифт/интервалы,
+      миниатюры или удалите лишние позиции — при печати нижняя часть будет обрезана.
+    </div>
+
+    <div class="sheet-wrap" id="sheetWrap">
+      <div id="sheet">
+        <div class="fold v" id="foldV"></div>
+        <div class="fold h" id="foldH"></div>
+        <div class="halfmark" id="halfmark">вторая половина листа — не используется</div>
+
+        <div id="panel">
+          <div class="p-head">
+            <div class="p-title" contenteditable data-ph="Заголовок прайса…" id="pTitle"></div>
+            <div class="p-sub" contenteditable data-ph="подзаголовок / телефон / дата…" id="pSub"></div>
+          </div>
+
+          <div class="main-block" id="mainBlock">
+            <div class="main-photo" id="mainPhoto"><span class="ph">ФОТО</span></div>
+            <div class="main-line">
+              <span class="nm" contenteditable data-ph="Основной товар" id="mainName"></span>
+              <span class="dots"></span>
+              <span class="pr" contenteditable data-ph="цена ₽" id="mainPrice"></span>
+            </div>
+            <div class="ctrls">
+              <button title="Фото основного товара" data-act="mainphoto">🖼</button>
+              <button title="Очистить" class="del" data-act="mainclear">✕</button>
+            </div>
+          </div>
+
+          <div class="p-body" id="body"></div>
+
+          <div class="addbar">
+            <button class="addbtn" id="addItem" title="Добавить позицию">+</button>
+            <span class="lbl">позиция</span>
+            <button class="addbtn" id="addSection" title="Добавить раздел">+</button>
+            <span class="lbl">раздел</span>
+          </div>
+
+          <div class="p-foot" contenteditable data-ph="сноска / условия / контакты…" id="pFoot"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<input type="file" id="photoPicker" accept="image/*" style="display:none">
+
+<script>
+"use strict";
+/* =====================================================================
+   Панель ценников — один файл, без сборки и без сервера.
+   Данные листа хранятся в localStorage, каталог тянется из YML по ссылке.
+   ===================================================================== */
+
+const $  = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const uid = () => Math.random().toString(36).slice(2, 9);
+const esc = s => String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+const LS_STATE = 'pricePanel.v1.state';
+const LS_SAVES = 'pricePanel.v1.saves';
+
+/* --------------------------- Состояние --------------------------- */
+const DEFAULT_SHEET = () => ({
+  half: 'left', foldPrint: false,
+  fs: 3.6, pad: 8, gap: 2.5, thumb: 12, mainw: 45,
+  showPhoto: true, showDots: true, cur: 'auto',
+  title: '', sub: '', foot: '',
+  main: { offerId: null, name: '', price: '', photo: '' },
+  blocks: []
+});
+
+let S = {
+  yml: { url: '', proxy: '', proxyCustom: '' },
+  sheet: DEFAULT_SHEET(),
+  zoom: 0            // 0 = вписать в окно
+};
+
+let CATALOG = { offers: [], byId: new Map(), cats: new Map(), currency: '' };
+
+function save() {
+  try { localStorage.setItem(LS_STATE, JSON.stringify(S)); }
+  catch (e) { console.warn('Не удалось сохранить состояние', e); }
+}
+function load() {
+  try {
+    const raw = localStorage.getItem(LS_STATE);
+    if (!raw) return;
+    const d = JSON.parse(raw);
+    S = {
+      yml: Object.assign({ url: '', proxy: '', proxyCustom: '' }, d.yml),
+      sheet: Object.assign(DEFAULT_SHEET(), d.sheet),
+      zoom: d.zoom || 0
+    };
+    S.sheet.main = Object.assign({ offerId: null, name: '', price: '', photo: '' }, S.sheet.main);
+    S.sheet.blocks = Array.isArray(S.sheet.blocks) ? S.sheet.blocks : [];
+  } catch (e) { console.warn('Состояние повреждено, начинаем с чистого листа', e); }
+}
+
+/* --------------------------- Цены и валюта --------------------------- */
+const CUR_SYMBOL = {
+  RUB: '₽', RUR: '₽', KZT: '₸', USD: '$', EUR: '€', UAH: '₴',
+  BYN: 'Br', BYR: 'Br', KGS: 'сом', UZS: 'сум', AZN: '₼', AMD: '֏', GEL: '₾'
+};
+function curSymbol() {
+  if (S.sheet.cur === 'auto') return CUR_SYMBOL[(CATALOG.currency || 'RUB').toUpperCase()] || CATALOG.currency || '₽';
+  return S.sheet.cur;
+}
+function fmtPrice(v) {
+  if (v === '' || v == null) return '';
+  const n = Number(String(v).replace(/\s/g, '').replace(',', '.'));
+  if (!isFinite(n)) return String(v);                      // ручной текст оставляем как есть
+  const s = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(n);
+  const c = curSymbol();
+  return c ? s + ' ' + c : s;
+}
+
+/* --------------------------- Загрузка YML --------------------------- */
+function proxyUrl(url) {
+  let p = S.yml.proxy;
+  if (p === 'custom') p = S.yml.proxyCustom || '';
+  if (!p) return url;
+  return p.includes('=') || p.endsWith('?') ? p + encodeURIComponent(url) : p + url;
+}
+
+function setStatus(text, cls) {
+  const el = $('#status');
+  el.className = 'status' + (cls ? ' ' + cls : '');
+  el.textContent = text;
+}
+
+async function fetchYml(url, silent) {
+  if (!url) { if (!silent) setStatus('Укажите ссылку на YML', 'err'); return; }
+  setStatus('Загрузка…');
+  try {
+    const res = await fetch(proxyUrl(url), { redirect: 'follow' });
+    if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + res.statusText);
+    const text = await res.text();
+    parseYml(text);
+    S.yml.url = url; save();
+  } catch (e) {
+    setStatus('Ошибка загрузки: ' + e.message +
+      '. Часто это блокировка CORS — выберите прокси или загрузите файл вручную.', 'err');
+  }
+}
+
+function textOf(parent, tag) {
+  const el = parent.getElementsByTagName(tag)[0];
+  return el ? el.textContent.trim() : '';
+}
+
+function parseYml(text) {
+  const doc = new DOMParser().parseFromString(text, 'application/xml');
+  const perr = doc.getElementsByTagName('parsererror')[0];
+  if (perr) { setStatus('XML не разобран: ' + perr.textContent.trim().slice(0, 160), 'err'); return; }
+
+  const cats = new Map();
+  [...doc.getElementsByTagName('category')].forEach(c => {
+    const id = c.getAttribute('id');
+    if (id) cats.set(id, c.textContent.trim());
+  });
+
+  const offers = [];
+  const nodes = doc.getElementsByTagName('offer');
+  for (const o of nodes) {
+    const pics = [...o.getElementsByTagName('picture')].map(p => p.textContent.trim()).filter(Boolean);
+    const name = textOf(o, 'name') ||
+      [textOf(o, 'typePrefix'), textOf(o, 'vendor'), textOf(o, 'model')].filter(Boolean).join(' ').trim();
+    const catId = textOf(o, 'categoryId');
+    offers.push({
+      id: o.getAttribute('id') || textOf(o, 'vendorCode') || String(offers.length + 1),
+      name: name || '(без названия)',
+      price: textOf(o, 'price'),
+      oldPrice: textOf(o, 'oldprice'),
+      currency: textOf(o, 'currencyId'),
+      picture: pics[0] || '',
+      vendor: textOf(o, 'vendor'),
+      vendorCode: textOf(o, 'vendorCode') || textOf(o, 'barcode'),
+      catId,
+      cat: cats.get(catId) || '',
+      available: o.getAttribute('available') !== 'false',
+      _s: ''
+    });
+  }
+  offers.forEach(o => { o._s = (o.name + ' ' + o.vendor + ' ' + o.vendorCode + ' ' + o.id).toLowerCase(); });
+
+  CATALOG.offers = offers;
+  CATALOG.byId = new Map(offers.map(o => [o.id, o]));
+  CATALOG.cats = cats;
+  CATALOG.currency = (offers.find(o => o.currency) || {}).currency || 'RUB';
+
+  const sel = $('#catFilter');
+  const used = new Map();
+  offers.forEach(o => { if (o.cat) used.set(o.catId, o.cat); });
+  sel.innerHTML = '<option value="">Все категории (' + offers.length + ')</option>' +
+    [...used.entries()].sort((a, b) => a[1].localeCompare(b[1], 'ru'))
+      .map(([id, n]) => '<option value="' + esc(id) + '">' + esc(n) + '</option>').join('');
+
+  setStatus('Загружено предложений: ' + offers.length +
+    (used.size ? ', категорий: ' + used.size : '') + '. Валюта: ' + (CATALOG.currency || '—'), 'ok');
+  renderSheet();
+  doSearch();
+}
+
+/* --------------------------- Поиск по каталогу --------------------------- */
+let searchTimer = 0;
+function doSearch() {
+  const box = $('#results');
+  const q = $('#q').value.trim().toLowerCase();
+  const cat = $('#catFilter').value;
+  if (!CATALOG.offers.length) { box.innerHTML = ''; return; }
+  if (q.length < 2 && !cat) {
+    box.innerHTML = '<div class="hint">Введите запрос или выберите категорию.</div>';
+    return;
+  }
+  const words = q.split(/\s+/).filter(Boolean);
+  const hits = [];
+  for (const o of CATALOG.offers) {
+    if (cat && o.catId !== cat) continue;
+    if (words.length && !words.every(w => o._s.includes(w))) continue;
+    hits.push(o);
+    if (hits.length >= 60) break;
+  }
+  if (!hits.length) { box.innerHTML = '<div class="hint">Ничего не найдено.</div>'; return; }
+  box.innerHTML = hits.map(o => `
+    <div class="hit" data-id="${esc(o.id)}">
+      ${o.picture
+        ? `<img src="${esc(o.picture)}" alt="" loading="lazy" referrerpolicy="no-referrer">`
+        : `<div class="noimg">нет фото</div>`}
+      <div class="t">
+        <div class="n">${esc(o.name)}</div>
+        <div class="m">${esc(o.vendorCode || o.id)}${o.cat ? ' · ' + esc(o.cat) : ''}${o.available ? '' : ' · нет в наличии'}</div>
+      </div>
+      <div class="p">${esc(fmtPrice(o.price))}</div>
+      <div class="add">
+        <button class="btn sm" data-act="add" title="Добавить позицией">+</button>
+        <button class="btn sm" data-act="main" title="Сделать основным товаром">★</button>
+      </div>
+    </div>`).join('');
+}
+
+/* --------------------------- Геометрия листа --------------------------- */
+const A4 = { long: 297, short: 210 };
+function geometry() {
+  const h = S.sheet.half;
+  const landscape = (h === 'left' || h === 'right');
+  const sw = landscape ? A4.long : A4.short;
+  const sh = landscape ? A4.short : A4.long;
+  const pw = landscape ? sw / 2 : sw;
+  const ph = landscape ? sh : sh / 2;
+  const px = (h === 'right') ? sw / 2 : 0;
+  const py = (h === 'bottom') ? sh / 2 : 0;
+  return { landscape, sw, sh, pw, ph, px, py };
+}
+
+const pageStyle = document.createElement('style');
+document.head.appendChild(pageStyle);
+
+function applyGeometry() {
+  const g = geometry();
+  const sheet = $('#sheet'), panel = $('#panel'), wrap = $('#sheetWrap');
+  const st = S.sheet;
+
+  sheet.style.setProperty('--sw', g.sw + 'mm');
+  sheet.style.setProperty('--sh', g.sh + 'mm');
+  wrap.style.setProperty('--sw', g.sw + 'mm');
+  wrap.style.setProperty('--sh', g.sh + 'mm');
+
+  panel.style.left = g.px + 'mm';
+  panel.style.top = g.py + 'mm';
+  panel.style.width = g.pw + 'mm';
+  panel.style.height = g.ph + 'mm';
+
+  sheet.style.setProperty('--pad', st.pad + 'mm');
+  sheet.style.setProperty('--fs', st.fs + 'mm');
+  sheet.style.setProperty('--gap', st.gap + 'mm');
+  sheet.style.setProperty('--thumb', st.thumb + 'mm');
+  sheet.style.setProperty('--mainw', Math.min(st.mainw, g.pw - st.pad * 2) + 'mm');
+  sheet.style.setProperty('--foldprint', st.foldPrint ? 'block' : 'none');
+
+  const fv = $('#foldV'), fh = $('#foldH'), hm = $('#halfmark');
+  fv.style.display = g.landscape ? 'block' : 'none';
+  fh.style.display = g.landscape ? 'none' : 'block';
+  fv.style.left = (g.sw / 2) + 'mm';
+  fh.style.top = (g.sh / 2) + 'mm';
+  // подпись на неиспользуемой половине
+  if (g.landscape) {
+    hm.style.top = '50%';
+    hm.style.left = (S.sheet.half === 'left' ? 0.75 : 0.25) * g.sw + 'mm';
+    hm.style.transform = 'translate(-50%,-50%)';
+  } else {
+    hm.style.left = '50%';
+    hm.style.top = (S.sheet.half === 'top' ? 0.75 : 0.25) * g.sh + 'mm';
+    hm.style.transform = 'translate(-50%,-50%)';
+  }
+
+  document.body.classList.toggle('nophoto', !st.showPhoto);
+  document.body.classList.toggle('nodots', !st.showDots);
+
+  pageStyle.textContent = '@page{size:A4 ' + (g.landscape ? 'landscape' : 'portrait') + ';margin:0}';
+  applyZoom();
+}
+
+function applyZoom() {
+  const g = geometry();
+  const wrap = $('#sheetWrap');
+  let z = S.zoom;
+  if (!z) {
+    const stage = $('#stage');
+    const availW = stage.clientWidth - 48;
+    const availH = stage.clientHeight - 130;
+    const mm = 96 / 25.4;                       // CSS-пиксели в 1 мм
+    z = Math.min(availW / (g.sw * mm), availH / (g.sh * mm), 1.6);
+    z = Math.max(0.15, z);
+  }
+  wrap.style.setProperty('--zoom', z);
+  $('#sheet').style.setProperty('--zoom', z);
+  $('#zoomVal').textContent = Math.round(z * 100) + '%';
+}
+
+/* --------------------------- Отрисовка листа --------------------------- */
+function photoHtml(src, phText) {
+  return src
+    ? `<img src="${esc(src)}" alt="" referrerpolicy="no-referrer">`
+    : `<span class="ph">${phText}</span>`;
+}
+
+function renderSheet() {
+  const st = S.sheet;
+
+  $('#pTitle').textContent = st.title;
+  $('#pSub').textContent = st.sub;
+  $('#pFoot').textContent = st.foot;
+  $('#mainName').textContent = st.main.name;
+  $('#mainPrice').textContent = st.main.price === '' ? '' : fmtPrice(st.main.price);
+  $('#mainPhoto').innerHTML = photoHtml(st.main.photo, 'ФОТО');
+
+  $('#body').innerHTML = st.blocks.map(b => {
+    if (b.type === 'section') {
+      return `<div class="blk section" data-id="${b.id}" draggable="true">
+        <div class="s-title" contenteditable data-bind="title" data-ph="Введите текст для раздела…">${esc(b.title)}</div>
+        <div class="ctrls">
+          <button data-act="up" title="Выше">↑</button>
+          <button data-act="down" title="Ниже">↓</button>
+          <button class="del" data-act="del" title="Удалить">✕</button>
+        </div></div>`;
+    }
+    if (b.type === 'spacer') {
+      return `<div class="blk spacer" data-id="${b.id}" draggable="true">
+        <div class="ctrls">
+          <button data-act="up">↑</button><button data-act="down">↓</button>
+          <button class="del" data-act="del">✕</button>
+        </div></div>`;
+    }
+    return `<div class="blk item" data-id="${b.id}" draggable="true">
+      <div class="thumb" data-act="photo" title="Клик — заменить фото">${photoHtml(b.photo, 'ФОТО')}</div>
+      <div class="grow" style="min-width:0">
+        <div class="i-main">
+          <span class="i-name" contenteditable data-bind="name" data-ph="Наименование">${esc(b.name)}</span>
+          <span class="i-dots"></span>
+          <span class="i-price" contenteditable data-bind="price" data-ph="цена">${esc(b.price === '' ? '' : fmtPrice(b.price))}</span>
+        </div>
+        ${b.note || b._noteOpen ? `<div class="i-note" contenteditable data-bind="note" data-ph="примечание">${esc(b.note || '')}</div>` : ''}
+      </div>
+      <div class="ctrls">
+        <button data-act="note" title="Примечание">≡</button>
+        <button data-act="photo" title="Фото">🖼</button>
+        <button data-act="up" title="Выше">↑</button>
+        <button data-act="down" title="Ниже">↓</button>
+        <button class="del" data-act="del" title="Удалить">✕</button>
+      </div></div>`;
+  }).join('');
+
+  checkOverflow();
+}
+
+/* Если картинка не открылась (нет сети, битая ссылка) — показываем заглушку,
+   но URL в данных не трогаем: при следующей загрузке фото появится. */
+document.addEventListener('error', e => {
+  const img = e.target;
+  if (!(img instanceof HTMLImageElement)) return;
+  if (img.closest('.thumb, .main-photo')) {
+    const ph = document.createElement('span');
+    ph.className = 'ph'; ph.textContent = 'ФОТО';
+    img.replaceWith(ph);
+  } else if (img.closest('.hit')) {
+    const d = document.createElement('div');
+    d.className = 'noimg'; d.textContent = 'нет фото';
+    img.replaceWith(d);
+  }
+}, true);
+
+/* Переполнение половины листа */
+let ofTimer = 0;
+function checkOverflow() {
+  clearTimeout(ofTimer);
+  ofTimer = setTimeout(() => {
+    const panel = $('#panel'), bar = $('.addbar');
+    const vis = bar.style.display;
+    bar.style.display = 'none';                    // панель кнопок не печатается
+    const over = panel.scrollHeight > panel.clientHeight + 1 ||
+                 $('#body').scrollHeight > $('#body').clientHeight + 1;
+    bar.style.display = vis;
+    panel.classList.toggle('overflow', over);
+    $('#overflowMsg').classList.toggle('on', over);
+  }, 60);
+}
+
+/* --------------------------- Операции с блоками --------------------------- */
+const findBlock = id => S.sheet.blocks.find(b => b.id === id);
+const blockIndex = id => S.sheet.blocks.findIndex(b => b.id === id);
+
+function addItem(offer) {
+  const b = offer
+    ? { id: uid(), type: 'item', offerId: offer.id, name: offer.name, price: offer.price, note: '', photo: offer.picture }
+    : { id: uid(), type: 'item', offerId: null, name: '', price: '', note: '', photo: '' };
+  S.sheet.blocks.push(b); save(); renderSheet();
+  if (!offer) focusBlock(b.id, '.i-name');
+  else scrollToBlock(b.id);
+}
+function addSection(title) {
+  const b = { id: uid(), type: 'section', title: title || '' };
+  S.sheet.blocks.push(b); save(); renderSheet(); focusBlock(b.id, '.s-title');
+}
+function focusBlock(id, sel) {
+  const el = $(`.blk[data-id="${id}"] ${sel}`);
+  if (el) { el.focus(); scrollToBlock(id); }
+}
+function scrollToBlock(id) {
+  const el = $(`.blk[data-id="${id}"]`);
+  if (el) el.scrollIntoView({ block: 'nearest' });
+}
+function move(id, dir) {
+  const i = blockIndex(id), j = i + dir;
+  if (i < 0 || j < 0 || j >= S.sheet.blocks.length) return;
+  const a = S.sheet.blocks;
+  [a[i], a[j]] = [a[j], a[i]];
+  save(); renderSheet();
+}
+function setMain(offer) {
+  S.sheet.main = { offerId: offer.id, name: offer.name, price: offer.price, photo: offer.picture };
+  save(); renderSheet();
+}
+
+/* Фото: локальный файл сжимаем, чтобы не переполнить localStorage */
+let photoTarget = null;
+function pickPhoto(target) { photoTarget = target; $('#photoPicker').value = ''; $('#photoPicker').click(); }
+
+function compress(file, maxSide = 520, quality = .82) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onerror = () => reject(new Error('Файл не прочитан'));
+    fr.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Не изображение'));
+      img.onload = () => {
+        const k = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const c = document.createElement('canvas');
+        c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+        ctx.drawImage(img, 0, 0, c.width, c.height);
+        resolve(c.toDataURL('image/jpeg', quality));
+      };
+      img.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+
+/* --------------------------- Обработчики: лист --------------------------- */
+$('#body').addEventListener('click', e => {
+  const blk = e.target.closest('.blk'); if (!blk) return;
+  const id = blk.dataset.id;
+  const act = e.target.closest('[data-act]')?.dataset.act;
+  if (!act) return;
+  if (act === 'del') { S.sheet.blocks.splice(blockIndex(id), 1); save(); renderSheet(); }
+  else if (act === 'up') move(id, -1);
+  else if (act === 'down') move(id, 1);
+  else if (act === 'photo') pickPhoto({ kind: 'block', id });
+  else if (act === 'note') {
+    const b = findBlock(id); b._noteOpen = true; save(); renderSheet(); focusBlock(id, '.i-note');
+  }
+});
+
+/* правка текста прямо на листе */
+$('#body').addEventListener('input', e => {
+  const el = e.target.closest('[data-bind]'); if (!el) return;
+  const b = findBlock(el.closest('.blk').dataset.id); if (!b) return;
+  const key = el.dataset.bind;
+  b[key] = el.textContent.trim();                  // id оффера сохраняем — цену можно будет сверить
+  save(); checkOverflow();
+});
+/* при потере фокуса приводим цену к единому формату */
+$('#body').addEventListener('focusout', e => {
+  const el = e.target.closest('[data-bind="price"]'); if (!el) return;
+  const b = findBlock(el.closest('.blk').dataset.id); if (!b) return;
+  const raw = el.textContent.replace(/[^\d.,\-]/g, '').trim();
+  if (raw) { b.price = raw.replace(',', '.'); el.textContent = fmtPrice(b.price); }
+  else { b.price = el.textContent.trim(); }
+  save(); checkOverflow();
+});
+
+/* заголовки/подвал/основной товар */
+[['#pTitle', 'title'], ['#pSub', 'sub'], ['#pFoot', 'foot']].forEach(([sel, key]) => {
+  $(sel).addEventListener('input', () => { S.sheet[key] = $(sel).textContent.trim(); save(); checkOverflow(); });
+});
+$('#mainName').addEventListener('input', () => { S.sheet.main.name = $('#mainName').textContent.trim(); save(); checkOverflow(); });
+$('#mainPrice').addEventListener('input', () => { S.sheet.main.price = $('#mainPrice').textContent.trim(); save(); checkOverflow(); });
+$('#mainPrice').addEventListener('focusout', () => {
+  const raw = $('#mainPrice').textContent.replace(/[^\d.,\-]/g, '').trim();
+  if (raw) { S.sheet.main.price = raw.replace(',', '.'); $('#mainPrice').textContent = fmtPrice(S.sheet.main.price); save(); }
+});
+$('#mainBlock').addEventListener('click', e => {
+  const act = e.target.closest('[data-act]')?.dataset.act;
+  if (act === 'mainphoto' || e.target.closest('#mainPhoto')) pickPhoto({ kind: 'main' });
+  else if (act === 'mainclear') {
+    S.sheet.main = { offerId: null, name: '', price: '', photo: '' }; save(); renderSheet();
+  }
+});
+
+/* вставка только текстом — чтобы на лист не попадала чужая вёрстка */
+document.addEventListener('paste', e => {
+  if (!e.target.closest('[contenteditable]')) return;
+  e.preventDefault();
+  const t = (e.clipboardData || window.clipboardData).getData('text/plain');
+  document.execCommand('insertText', false, t.replace(/\s*\n\s*/g, ' '));
+});
+/* Enter в строке листа не должен плодить <div> */
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.closest('#panel [contenteditable]')) { e.preventDefault(); e.target.blur(); }
+});
+
+/* выбранный файл фото */
+$('#photoPicker').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f || !photoTarget) return;
+  try {
+    const data = await compress(f);
+    if (photoTarget.kind === 'main') S.sheet.main.photo = data;
+    else { const b = findBlock(photoTarget.id); if (b) b.photo = data; }
+    save(); renderSheet();
+  } catch (err) { alert('Не удалось загрузить изображение: ' + err.message); }
+  photoTarget = null;
+});
+
+/* перетаскивание позиций */
+let dragId = null;
+$('#body').addEventListener('dragstart', e => {
+  const blk = e.target.closest('.blk'); if (!blk) return;
+  dragId = blk.dataset.id; blk.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', dragId);
+});
+$('#body').addEventListener('dragend', () => {
+  dragId = null;
+  $$('.blk').forEach(b => b.classList.remove('dragging', 'drop'));
+});
+$('#body').addEventListener('dragover', e => {
+  if (!dragId) return;
+  e.preventDefault();
+  const over = e.target.closest('.blk');
+  $$('.blk').forEach(b => b.classList.toggle('drop', b === over && b.dataset.id !== dragId));
+});
+$('#body').addEventListener('drop', e => {
+  if (!dragId) return;
+  e.preventDefault();
+  const over = e.target.closest('.blk');
+  $$('.blk').forEach(b => b.classList.remove('drop'));
+  if (!over || over.dataset.id === dragId) return;
+  const a = S.sheet.blocks;
+  const from = blockIndex(dragId);
+  const item = a.splice(from, 1)[0];
+  a.splice(blockIndex(over.dataset.id), 0, item);
+  save(); renderSheet();
+});
+
+/* кнопки «+» на листе и в тулбаре */
+$('#addItem').addEventListener('click', () => addItem(null));
+$('#addSection').addEventListener('click', () => addSection(''));
+$('#addItemTop').addEventListener('click', () => addItem(null));
+$('#addSectionTop').addEventListener('click', () => addSection(''));
+
+/* --------------------------- Обработчики: каталог --------------------------- */
+$('#results').addEventListener('click', e => {
+  const hit = e.target.closest('.hit'); if (!hit) return;
+  const offer = CATALOG.byId.get(hit.dataset.id); if (!offer) return;
+  const act = e.target.closest('[data-act]')?.dataset.act;
+  if (act === 'main') setMain(offer); else addItem(offer);
+});
+$('#q').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(doSearch, 150); });
+$('#catFilter').addEventListener('change', doSearch);
+
+$('#loadUrl').addEventListener('click', () => fetchYml($('#ymlUrl').value.trim()));
+$('#ymlUrl').addEventListener('keydown', e => { if (e.key === 'Enter') fetchYml($('#ymlUrl').value.trim()); });
+$('#proxy').addEventListener('change', () => {
+  S.yml.proxy = $('#proxy').value;
+  $('#proxyCustom').style.display = S.yml.proxy === 'custom' ? 'block' : 'none';
+  save();
+});
+$('#proxyCustom').addEventListener('input', () => { S.yml.proxyCustom = $('#proxyCustom').value.trim(); save(); });
+$('#ymlFile').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  const fr = new FileReader();
+  fr.onload = () => parseYml(fr.result);
+  fr.onerror = () => setStatus('Файл не прочитан', 'err');
+  fr.readAsText(f, 'utf-8');
+});
+$('#loadPaste').addEventListener('click', () => {
+  const t = $('#ymlPaste').value.trim();
+  if (t) parseYml(t); else setStatus('Пустое поле', 'err');
+});
+
+$('#refreshPrices').addEventListener('click', async () => {
+  if (!CATALOG.offers.length) {
+    if (S.yml.url) await fetchYml(S.yml.url);
+    if (!CATALOG.offers.length) { alert('Сначала загрузите YML.'); return; }
+  } else if (S.yml.url) {
+    await fetchYml(S.yml.url);
+  }
+  let upd = 0, miss = 0;
+  const apply = obj => {
+    if (!obj.offerId) return;
+    const o = CATALOG.byId.get(obj.offerId);
+    if (!o) { miss++; return; }
+    if (String(obj.price) !== String(o.price)) upd++;
+    obj.price = o.price; obj.name = obj.name || o.name;
+    if (o.picture && (!obj.photo || !obj.photo.startsWith('data:'))) obj.photo = o.picture;
+  };
+  apply(S.sheet.main);
+  S.sheet.blocks.forEach(b => { if (b.type === 'item') apply(b); });
+  save(); renderSheet();
+  setStatus('Цены обновлены. Изменено: ' + upd + (miss ? ', не найдено в YML: ' + miss : ''), miss ? 'warn' : 'ok');
+});
+
+/* --------------------------- Обработчики: настройки листа --------------------------- */
+function bindRange(sel, key, valSel, digits) {
+  $(sel).addEventListener('input', () => {
+    S.sheet[key] = parseFloat($(sel).value);
+    $(valSel).textContent = digits ? S.sheet[key].toFixed(digits) : S.sheet[key];
+    applyGeometry(); save(); checkOverflow();
+  });
+}
+bindRange('#fs', 'fs', '#fsVal', 1);
+bindRange('#pad', 'pad', '#padVal', 1);
+bindRange('#gap', 'gap', '#gapVal', 1);
+bindRange('#th', 'thumb', '#thVal', 0);
+bindRange('#mw', 'mainw', '#mwVal', 0);
+
+$('#half').addEventListener('change', () => { S.sheet.half = $('#half').value; applyGeometry(); save(); checkOverflow(); });
+$('#foldPrint').addEventListener('change', () => { S.sheet.foldPrint = $('#foldPrint').checked; applyGeometry(); save(); });
+$('#showPhoto').addEventListener('change', () => { S.sheet.showPhoto = $('#showPhoto').checked; applyGeometry(); save(); checkOverflow(); });
+$('#showDots').addEventListener('change', () => { S.sheet.showDots = $('#showDots').checked; applyGeometry(); save(); });
+$('#cur').addEventListener('change', () => { S.sheet.cur = $('#cur').value; save(); renderSheet(); doSearch(); });
+
+/* вкладки */
+$$('.tab').forEach(t => t.addEventListener('click', () => {
+  $$('.tab').forEach(x => x.classList.toggle('active', x === t));
+  $$('.pane').forEach(p => p.classList.toggle('active', p.id === 'pane-' + t.dataset.tab));
+}));
+
+/* масштаб и печать */
+$('#zoomIn').addEventListener('click', () => { S.zoom = Math.min(2, (S.zoom || currentZoom()) + .1); applyZoom(); save(); });
+$('#zoomOut').addEventListener('click', () => { S.zoom = Math.max(.15, (S.zoom || currentZoom()) - .1); applyZoom(); save(); });
+$('#zoomFit').addEventListener('click', () => { S.zoom = 0; applyZoom(); save(); });
+function currentZoom() { return parseFloat(getComputedStyle($('#sheet')).getPropertyValue('--zoom')) || 1; }
+$('#print').addEventListener('click', () => window.print());
+window.addEventListener('resize', () => { if (!S.zoom) applyZoom(); });
+
+/* --------------------------- Шаблоны --------------------------- */
+function getSaves() { try { return JSON.parse(localStorage.getItem(LS_SAVES) || '[]'); } catch { return []; } }
+function setSaves(v) { localStorage.setItem(LS_SAVES, JSON.stringify(v)); renderSaves(); }
+function renderSaves() {
+  const list = getSaves();
+  $('#saveList').innerHTML = list.length
+    ? list.map((s, i) => `
+      <div class="hit">
+        <div class="t"><div class="n">${esc(s.name)}</div>
+        <div class="m">${new Date(s.at).toLocaleString('ru-RU')} · позиций: ${(s.sheet.blocks || []).filter(b => b.type === 'item').length}</div></div>
+        <button class="btn sm" data-i="${i}" data-act="open">Открыть</button>
+        <button class="btn sm" data-i="${i}" data-act="rm">✕</button>
+      </div>`).join('')
+    : '<div class="hint">Сохранённых шаблонов нет.</div>';
+}
+$('#doSave').addEventListener('click', () => {
+  const name = $('#saveName').value.trim() || ('Шаблон ' + new Date().toLocaleDateString('ru-RU'));
+  const list = getSaves();
+  list.unshift({ name, at: Date.now(), sheet: JSON.parse(JSON.stringify(S.sheet)) });
+  setSaves(list.slice(0, 40));
+  $('#saveName').value = '';
+});
+$('#saveList').addEventListener('click', e => {
+  const btn = e.target.closest('[data-act]'); if (!btn) return;
+  const list = getSaves(), i = +btn.dataset.i;
+  if (btn.dataset.act === 'open') {
+    S.sheet = Object.assign(DEFAULT_SHEET(), list[i].sheet);
+    save(); syncControls(); applyGeometry(); renderSheet();
+  } else if (confirm('Удалить шаблон «' + list[i].name + '»?')) {
+    list.splice(i, 1); setSaves(list);
+  }
+});
+$('#exportJson').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify({ sheet: S.sheet, yml: S.yml }, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'price-panel-' + new Date().toISOString().slice(0, 10) + '.json';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+$('#importJson').addEventListener('click', () => $('#importFile').click());
+$('#importFile').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  const fr = new FileReader();
+  fr.onload = () => {
+    try {
+      const d = JSON.parse(fr.result);
+      if (d.sheet) S.sheet = Object.assign(DEFAULT_SHEET(), d.sheet);
+      if (d.yml) S.yml = Object.assign(S.yml, d.yml);
+      save(); syncControls(); applyGeometry(); renderSheet();
+    } catch (err) { alert('Файл не читается: ' + err.message); }
+  };
+  fr.readAsText(f);
+});
+$('#clearAll').addEventListener('click', () => {
+  if (!confirm('Очистить лист? Сохранённые шаблоны останутся.')) return;
+  S.sheet = DEFAULT_SHEET(); save(); syncControls(); applyGeometry(); renderSheet();
+});
+
+/* --------------------------- Старт --------------------------- */
+function syncControls() {
+  const st = S.sheet;
+  $('#half').value = st.half;
+  $('#foldPrint').checked = !!st.foldPrint;
+  $('#fs').value = st.fs;   $('#fsVal').textContent = st.fs.toFixed(1);
+  $('#pad').value = st.pad; $('#padVal').textContent = st.pad.toFixed(1);
+  $('#gap').value = st.gap; $('#gapVal').textContent = st.gap.toFixed(1);
+  $('#th').value = st.thumb; $('#thVal').textContent = st.thumb;
+  $('#mw').value = st.mainw; $('#mwVal').textContent = st.mainw;
+  $('#showPhoto').checked = st.showPhoto;
+  $('#showDots').checked = st.showDots;
+  $('#cur').value = st.cur;
+  $('#ymlUrl').value = S.yml.url || '';
+  $('#proxy').value = S.yml.proxy || '';
+  $('#proxyCustom').value = S.yml.proxyCustom || '';
+  $('#proxyCustom').style.display = S.yml.proxy === 'custom' ? 'block' : 'none';
+}
+
+load();
+syncControls();
+applyGeometry();
+renderSheet();
+renderSaves();
+if (S.yml.url) fetchYml(S.yml.url, true);
+</script>
+</body>
+</html>
