@@ -108,38 +108,34 @@ label.f{display:block;font-size:12px;color:var(--muted);margin:0 0 3px}
   pointer-events:none;user-select:none
 }
 
-/* панель — рабочая половина листа */
-#panel{
+/* панель — половина листа; их может быть две */
+.panel{
   position:absolute;overflow:hidden;
   display:flex;flex-direction:column;
   padding:var(--pad);font-family:Arial,"Helvetica Neue",Helvetica,sans-serif;color:#000;
 }
-#panel.overflow{outline:1.2mm solid rgba(220,38,38,.5);outline-offset:-1.2mm}
-
-/* шапка */
-.p-head{text-align:center;flex:none}
-.p-title{
-  font-size:calc(var(--fs) * 1.5);font-weight:700;line-height:1.15;
-  min-height:1em;margin:0 0 1mm
+.panel[hidden]{display:none}
+.panel.overflow{outline:1.2mm solid rgba(220,38,38,.5);outline-offset:-1.2mm}
+@media screen{
+  /* активная половина — в неё попадают товары из каталога */
+  #sheet.two .panel.active::after{
+    content:"сюда добавляются товары";
+    position:absolute;left:0;right:0;top:0;text-align:center;
+    font-size:2.6mm;letter-spacing:.2mm;color:#93c5fd;pointer-events:none
+  }
+  #sheet.two .panel{cursor:pointer}
+  #sheet.two .panel.active{background:#fbfdff}
 }
-.p-sub{font-size:calc(var(--fs) * .85);color:#444;min-height:1em}
 
-/* главный товар */
-.main-block{flex:none;text-align:center;margin:2mm 0 1mm}
+/* фото первого товара — крупно сверху */
+.main-block{flex:none;text-align:center;margin:0 0 2mm}
 .main-photo{
   width:var(--mainw);aspect-ratio:3/4;margin:0 auto;background:var(--ph);
   display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative
 }
 .main-photo img{width:100%;height:100%;object-fit:contain;background:#fff}
 .main-photo .ph{font-size:3.4mm;color:#555;letter-spacing:.3mm}
-.main-line{
-  display:flex;align-items:baseline;gap:2mm;margin-top:2.5mm;
-  font-size:calc(var(--fs) * 1.12);font-weight:600
-}
-.main-line .nm{text-align:left;flex:0 1 auto}
-.main-line .dots{flex:1;border-bottom:.3mm dotted #999;transform:translateY(-1mm)}
-.main-line .pr{white-space:nowrap;font-weight:700}
-body.nodots .dots{border-bottom:none}
+body.nodots .i-dots{border-bottom:none}
 
 /* список позиций */
 .p-body{flex:1;min-height:0;display:flex;flex-direction:column;gap:var(--gap)}
@@ -163,7 +159,10 @@ body.nophoto .thumb{display:none}
 .i-price{font-size:var(--fs);font-weight:700;white-space:nowrap}
 .i-note{font-size:calc(var(--fs) * .78);color:#555;line-height:1.15;margin-top:.4mm}
 .blk.spacer{height:var(--fs)}
-.p-foot{flex:none;font-size:calc(var(--fs) * .78);color:#333;text-align:center;padding-top:1.5mm;min-height:1em}
+@media screen{
+  /* на экране помечаем позицию, чьё фото уходит в большую картинку */
+  .blk.item.isfirst .thumb{outline:.4mm solid #93c5fd;outline-offset:.3mm}
+}
 
 /* редактирование прямо на листе */
 [contenteditable]{outline:none}
@@ -172,19 +171,30 @@ body.nophoto .thumb{display:none}
   [contenteditable]:hover{background:#eef4ff;box-shadow:0 0 0 .3mm #dbeafe}
   [contenteditable]:focus{background:#e8f0ff;box-shadow:0 0 0 .3mm #93c5fd}
 }
-.ctrls{
-  position:absolute;right:-1mm;top:50%;transform:translate(100%,-50%);
-  display:none;gap:2px;background:#fff;border:1px solid var(--line);border-radius:5px;
-  padding:2px;box-shadow:0 1px 6px rgba(0,0,0,.12);z-index:3
+/* Панель кнопок позиции — вне листа (position:fixed), поэтому её не режет
+   overflow панели и не мельчит масштаб просмотра. */
+#blkTools{
+  position:fixed;z-index:50;display:flex;gap:2px;background:#fff;
+  border:1px solid var(--line);border-radius:7px;padding:3px;
+  box-shadow:0 3px 14px rgba(0,0,0,.18)
 }
-.blk:hover>.ctrls,.main-block:hover>.ctrls{display:flex}
-.ctrls button{
-  border:0;background:transparent;border-radius:4px;width:22px;height:22px;line-height:1;
-  font-size:13px;color:#374151
+#blkTools[hidden]{display:none}
+#blkTools button{
+  border:0;background:transparent;border-radius:5px;width:28px;height:28px;
+  font-size:14px;line-height:1;color:#374151;display:flex;align-items:center;justify-content:center
 }
-.ctrls button:hover{background:#eef0f3}
-.ctrls button.del:hover{background:#fee2e2;color:#b91c1c}
-.addbar{display:flex;gap:6px;margin-top:2mm;flex:none}
+#blkTools button:hover{background:#eef0f3}
+#blkTools button.del:hover{background:#fee2e2;color:#b91c1c}
+#blkTools button.grip{cursor:grab;color:#9ca3af}
+#blkTools button.grip:active{cursor:grabbing}
+#blkTools button[hidden]{display:none}
+.blk.hot{background:#eef4ff;box-shadow:0 0 0 .5mm #dbeafe}
+.blk.drop-before{box-shadow:0 -.7mm 0 var(--accent)}
+.blk.drop-after{box-shadow:0 .7mm 0 var(--accent)}
+.addbar{
+  position:absolute;left:var(--pad);bottom:2mm;display:flex;gap:6px;z-index:2;
+  background:rgba(255,255,255,.92);border-radius:1mm;padding:.5mm
+}
 .addbtn{
   width:9mm;height:7mm;background:var(--ph);border:0;border-radius:1mm;
   font-size:5mm;line-height:1;color:#111;display:flex;align-items:center;justify-content:center
@@ -204,7 +214,8 @@ body.nophoto .thumb{display:none}
 
 /* ============================== ПЕЧАТЬ ============================== */
 @media print{
-  #side,#toolbar,#overflowMsg,.ctrls,.addbar,.halfmark{display:none !important}
+  #side,#toolbar,#overflowMsg,#blkTools,.addbar,.halfmark{display:none !important}
+  .blk.hot,.blk.drop-before,.blk.drop-after{background:none !important;box-shadow:none !important}
   body{background:#fff}
   #app{display:block;height:auto;overflow:visible}
   #stage{padding:0;display:block;overflow:visible}
@@ -215,6 +226,8 @@ body.nophoto .thumb{display:none}
   }
   #panel.overflow{outline:none}
   #sheet .fold{display:var(--foldprint,none)}
+  #sheet .panel::after{display:none !important}
+  #sheet .panel.active{background:none !important}
   [contenteditable]:empty::before{content:"" !important}
   .thumb,.main-photo{background:var(--ph)}
   *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -278,20 +291,31 @@ body.nophoto .thumb{display:none}
         <select id="catFilter" class="grow"><option value="">Все категории</option></select>
       </div>
       <div class="hint" style="margin-top:6px">
-        Левый клик по карточке — добавить в список. Кнопка «★» — сделать основным товаром.
+        Клик по карточке — добавить в конец списка. Кнопка «★» — поставить первым:
+        фото первой позиции печатается крупно вверху листа.
       </div>
       <div id="results"></div>
     </section>
 
     <!-- ---------- Лист ---------- -->
     <section class="pane" id="pane-sheet">
-      <label class="f">Ориентация листа и рабочая половина</label>
-      <div class="row">
+      <label class="f">Ориентация листа</label>
+      <select id="orient">
+        <option value="landscape">A4 альбомная — половины слева и справа</option>
+        <option value="portrait">A4 книжная — половины сверху и снизу</option>
+      </select>
+
+      <label class="f" style="margin-top:8px">Как используется лист</label>
+      <select id="mode">
+        <option value="one">Только одна половина</option>
+        <option value="two">Две независимые половины — два разных прайса</option>
+        <option value="flow">Один прайс — список перетекает во вторую половину</option>
+      </select>
+
+      <div class="row" style="margin-top:6px" id="halfRow">
         <select id="half" class="grow">
-          <option value="left">A4 альбомная — левая половина</option>
-          <option value="right">A4 альбомная — правая половина</option>
-          <option value="top">A4 книжная — верхняя половина</option>
-          <option value="bottom">A4 книжная — нижняя половина</option>
+          <option value="first">Заполняется первая половина (левая / верхняя)</option>
+          <option value="second">Заполняется вторая половина (правая / нижняя)</option>
         </select>
       </div>
       <div class="row" style="margin-top:6px">
@@ -379,8 +403,8 @@ body.nophoto .thumb{display:none}
     </div>
 
     <div id="overflowMsg">
-      ⚠ Содержимое не помещается на половину листа A4. Уменьшите шрифт/интервалы,
-      миниатюры или удалите лишние позиции — при печати нижняя часть будет обрезана.
+      ⚠ <b>Товары не помещаются на лист.</b> Уменьшите шрифт, интервалы или миниатюры
+      на вкладке «Лист», либо удалите лишние позиции — иначе при печати нижние строки обрежутся.
     </div>
 
     <div class="sheet-wrap" id="sheetWrap">
@@ -389,39 +413,43 @@ body.nophoto .thumb{display:none}
         <div class="fold h" id="foldH"></div>
         <div class="halfmark" id="halfmark">вторая половина листа — не используется</div>
 
-        <div id="panel">
-          <div class="p-head">
-            <div class="p-title" contenteditable data-ph="Заголовок прайса…" id="pTitle"></div>
-            <div class="p-sub" contenteditable data-ph="подзаголовок / телефон / дата…" id="pSub"></div>
+        <div class="panel" id="panelA" data-p="A">
+          <div class="main-block" data-main="A" title="Фото первого товара в списке. Клик — заменить своим файлом">
+            <div class="main-photo" id="mainPhotoA"><span class="ph">ФОТО</span></div>
           </div>
-
-          <div class="main-block" id="mainBlock">
-            <div class="main-photo" id="mainPhoto"><span class="ph">ФОТО</span></div>
-            <div class="main-line">
-              <span class="nm" contenteditable data-ph="Основной товар" id="mainName"></span>
-              <span class="dots"></span>
-              <span class="pr" contenteditable data-ph="цена ₽" id="mainPrice"></span>
-            </div>
-            <div class="ctrls">
-              <button title="Фото основного товара" data-act="mainphoto">🖼</button>
-              <button title="Очистить" class="del" data-act="mainclear">✕</button>
-            </div>
-          </div>
-
-          <div class="p-body" id="body"></div>
-
+          <div class="p-body" id="body" data-p="A"></div>
           <div class="addbar">
-            <button class="addbtn" id="addItem" title="Добавить позицию">+</button>
+            <button class="addbtn" data-add="item" data-p="A" title="Добавить позицию">+</button>
             <span class="lbl">позиция</span>
-            <button class="addbtn" id="addSection" title="Добавить раздел">+</button>
+            <button class="addbtn" data-add="section" data-p="A" title="Добавить раздел">+</button>
             <span class="lbl">раздел</span>
           </div>
+        </div>
 
-          <div class="p-foot" contenteditable data-ph="сноска / условия / контакты…" id="pFoot"></div>
+        <div class="panel" id="panelB" data-p="B" hidden>
+          <div class="main-block" data-main="B" title="Фото первого товара второй половины. Клик — заменить своим файлом">
+            <div class="main-photo" id="mainPhotoB"><span class="ph">ФОТО</span></div>
+          </div>
+          <div class="p-body" id="bodyB" data-p="B"></div>
+          <div class="addbar">
+            <button class="addbtn" data-add="item" data-p="B" title="Добавить позицию">+</button>
+            <span class="lbl">позиция</span>
+            <button class="addbtn" data-add="section" data-p="B" title="Добавить раздел">+</button>
+            <span class="lbl">раздел</span>
+          </div>
         </div>
       </div>
     </div>
   </main>
+</div>
+
+<div id="blkTools" hidden>
+  <button class="grip" data-act="grip" title="Перетащить на другое место">⠿</button>
+  <button data-act="up" title="Переместить выше">↑</button>
+  <button data-act="down" title="Переместить ниже">↓</button>
+  <button data-act="photo" data-only="item" title="Заменить фото">🖼</button>
+  <button data-act="note" data-only="item" title="Примечание">≡</button>
+  <button class="del" data-act="del" title="Удалить">✕</button>
 </div>
 
 <input type="file" id="photoPicker" accept="image/*" style="display:none">
@@ -444,17 +472,19 @@ const LS_SAVES = 'pricePanel.v1.saves';
 
 /* --------------------------- Состояние --------------------------- */
 const DEFAULT_SHEET = () => ({
-  half: 'left', foldPrint: false,
+  orient: 'landscape',      // landscape: половины слева/справа; portrait: сверху/снизу
+  mode: 'flow',             // one | two | flow
+  half: 'first',            // какая половина работает в режиме one
+  foldPrint: false,
   fs: 3.6, pad: 8, gap: 2.5, thumb: 12, mainw: 45,
   showPhoto: true, showDots: true, cur: 'auto',
-  title: '', sub: '', foot: '',
-  main: { offerId: null, name: '', price: '', photo: '' },
-  blocks: []
+  blocks: [], blocks2: []
 });
 
 let S = {
   yml: { url: '', proxy: '', proxyCustom: '' },
   sheet: DEFAULT_SHEET(),
+  active: 'A',       // половина, в которую добавляются товары (режим двух прайсов)
   zoom: 0            // 0 = вписать в окно
 };
 
@@ -464,6 +494,31 @@ function save() {
   try { localStorage.setItem(LS_STATE, JSON.stringify(S)); }
   catch (e) { console.warn('Не удалось сохранить состояние', e); }
 }
+/* Приводит лист любого возраста к текущей схеме. */
+function migrateSheet(src) {
+  const st = Object.assign(DEFAULT_SHEET(), src || {});
+  st.blocks = Array.isArray(st.blocks) ? st.blocks : [];
+  st.blocks2 = Array.isArray(st.blocks2) ? st.blocks2 : [];
+  // раньше половина задавалась одним полем: left/right/top/bottom
+  if (['left', 'right', 'top', 'bottom'].includes(st.half)) {
+    st.orient = (st.half === 'left' || st.half === 'right') ? 'landscape' : 'portrait';
+    st.mode = 'one';
+    st.half = (st.half === 'right' || st.half === 'bottom') ? 'second' : 'first';
+  }
+  if (!['one', 'two', 'flow'].includes(st.mode)) st.mode = 'flow';
+  if (!['first', 'second'].includes(st.half)) st.half = 'first';
+  // бывший «основной товар» становится первой позицией списка
+  const old = src && src.main;
+  if (old && (old.name || old.photo)) {
+    st.blocks.unshift({
+      id: uid(), type: 'item', offerId: old.offerId || null,
+      name: old.name || '', price: old.price || '', note: '', photo: old.photo || ''
+    });
+  }
+  delete st.main; delete st.title; delete st.sub; delete st.foot;
+  return st;
+}
+
 function load() {
   try {
     const raw = localStorage.getItem(LS_STATE);
@@ -471,11 +526,10 @@ function load() {
     const d = JSON.parse(raw);
     S = {
       yml: Object.assign({ url: '', proxy: '', proxyCustom: '' }, d.yml),
-      sheet: Object.assign(DEFAULT_SHEET(), d.sheet),
+      sheet: migrateSheet(d.sheet),
+      active: d.active === 'B' ? 'B' : 'A',
       zoom: d.zoom || 0
     };
-    S.sheet.main = Object.assign({ offerId: null, name: '', price: '', photo: '' }, S.sheet.main);
-    S.sheet.blocks = Array.isArray(S.sheet.blocks) ? S.sheet.blocks : [];
   } catch (e) { console.warn('Состояние повреждено, начинаем с чистого листа', e); }
 }
 
@@ -623,63 +677,67 @@ function doSearch() {
 
 /* --------------------------- Геометрия листа --------------------------- */
 const A4 = { long: 297, short: 210 };
+
+/* Половины листа: [0] — левая/верхняя, [1] — правая/нижняя.
+   Панель A всегда заполняется первой, панель B — вторая половина. */
 function geometry() {
-  const h = S.sheet.half;
-  const landscape = (h === 'left' || h === 'right');
-  const sw = landscape ? A4.long : A4.short;
-  const sh = landscape ? A4.short : A4.long;
-  const pw = landscape ? sw / 2 : sw;
-  const ph = landscape ? sh : sh / 2;
-  const px = (h === 'right') ? sw / 2 : 0;
-  const py = (h === 'bottom') ? sh / 2 : 0;
-  return { landscape, sw, sh, pw, ph, px, py };
+  const st = S.sheet;
+  const land = st.orient === 'landscape';
+  const sw = land ? A4.long : A4.short;
+  const sh = land ? A4.short : A4.long;
+  const hw = land ? sw / 2 : sw;
+  const hh = land ? sh : sh / 2;
+  const spots = [
+    { x: 0, y: 0, w: hw, h: hh },
+    land ? { x: sw / 2, y: 0, w: hw, h: hh } : { x: 0, y: sh / 2, w: hw, h: hh }
+  ];
+  const iA = (st.mode === 'one' && st.half === 'second') ? 1 : 0;
+  return { land, sw, sh, A: spots[iA], B: spots[1 - iA], showB: st.mode !== 'one', mode: st.mode };
 }
 
 const pageStyle = document.createElement('style');
 document.head.appendChild(pageStyle);
 
 function applyGeometry() {
-  const g = geometry();
-  const sheet = $('#sheet'), panel = $('#panel'), wrap = $('#sheetWrap');
-  const st = S.sheet;
+  const g = geometry(), st = S.sheet;
+  const sheet = $('#sheet'), wrap = $('#sheetWrap');
 
   sheet.style.setProperty('--sw', g.sw + 'mm');
   sheet.style.setProperty('--sh', g.sh + 'mm');
   wrap.style.setProperty('--sw', g.sw + 'mm');
   wrap.style.setProperty('--sh', g.sh + 'mm');
 
-  panel.style.left = g.px + 'mm';
-  panel.style.top = g.py + 'mm';
-  panel.style.width = g.pw + 'mm';
-  panel.style.height = g.ph + 'mm';
+  [['#panelA', g.A], ['#panelB', g.B]].forEach(([sel, r]) => {
+    const el = $(sel);
+    el.style.left = r.x + 'mm'; el.style.top = r.y + 'mm';
+    el.style.width = r.w + 'mm'; el.style.height = r.h + 'mm';
+  });
+  $('#panelB').hidden = !g.showB;
+
+  sheet.classList.toggle('two', st.mode === 'two');
+  sheet.classList.toggle('flow', st.mode === 'flow');
 
   sheet.style.setProperty('--pad', st.pad + 'mm');
   sheet.style.setProperty('--fs', st.fs + 'mm');
   sheet.style.setProperty('--gap', st.gap + 'mm');
   sheet.style.setProperty('--thumb', st.thumb + 'mm');
-  sheet.style.setProperty('--mainw', Math.min(st.mainw, g.pw - st.pad * 2) + 'mm');
+  sheet.style.setProperty('--mainw', Math.min(st.mainw, g.A.w - st.pad * 2) + 'mm');
   sheet.style.setProperty('--foldprint', st.foldPrint ? 'block' : 'none');
 
   const fv = $('#foldV'), fh = $('#foldH'), hm = $('#halfmark');
-  fv.style.display = g.landscape ? 'block' : 'none';
-  fh.style.display = g.landscape ? 'none' : 'block';
+  fv.style.display = g.land ? 'block' : 'none';
+  fh.style.display = g.land ? 'none' : 'block';
   fv.style.left = (g.sw / 2) + 'mm';
   fh.style.top = (g.sh / 2) + 'mm';
-  // подпись на неиспользуемой половине
-  if (g.landscape) {
-    hm.style.top = '50%';
-    hm.style.left = (S.sheet.half === 'left' ? 0.75 : 0.25) * g.sw + 'mm';
-    hm.style.transform = 'translate(-50%,-50%)';
-  } else {
-    hm.style.left = '50%';
-    hm.style.top = (S.sheet.half === 'top' ? 0.75 : 0.25) * g.sh + 'mm';
-    hm.style.transform = 'translate(-50%,-50%)';
-  }
+  hm.style.display = g.showB ? 'none' : 'block';          // подпись только у пустой половины
+  hm.style.left = (g.B.x + g.B.w / 2) + 'mm';
+  hm.style.top = (g.B.y + g.B.h / 2) + 'mm';
+  hm.style.transform = 'translate(-50%,-50%)';
 
   document.body.classList.toggle('nophoto', !st.showPhoto);
   document.body.classList.toggle('nodots', !st.showDots);
 
-  pageStyle.textContent = '@page{size:A4 ' + (g.landscape ? 'landscape' : 'portrait') + ';margin:0}';
+  pageStyle.textContent = '@page{size:A4 ' + (g.land ? 'landscape' : 'portrait') + ';margin:0}';
   applyZoom();
 }
 
@@ -700,6 +758,24 @@ function applyZoom() {
   $('#zoomVal').textContent = Math.round(z * 100) + '%';
 }
 
+/* --------------------------- Списки товаров --------------------------- */
+/* Панель A хранит blocks, панель B — blocks2. В режиме «перетекание»
+   список один (blocks), вторая половина лишь показывает его хвост. */
+const listOfPanel = pan => (pan === 'B' && S.sheet.mode === 'two') ? S.sheet.blocks2 : S.sheet.blocks;
+const activeList = () => listOfPanel(S.sheet.mode === 'two' ? S.active : 'A');
+const allLists = () => S.sheet.mode === 'two' ? [S.sheet.blocks, S.sheet.blocks2] : [S.sheet.blocks];
+const firstItem = list => list.find(b => b.type === 'item') || null;
+
+function findBlock(id) {
+  for (const l of allLists()) { const b = l.find(x => x.id === id); if (b) return b; }
+  return null;
+}
+function listOf(id) {
+  for (const l of allLists()) if (l.some(x => x.id === id)) return l;
+  return S.sheet.blocks;
+}
+const blockIndex = id => listOf(id).findIndex(b => b.id === id);
+
 /* --------------------------- Отрисовка листа --------------------------- */
 function photoHtml(src, phText) {
   return src
@@ -707,53 +783,56 @@ function photoHtml(src, phText) {
     : `<span class="ph">${phText}</span>`;
 }
 
+function blockHtml(b, first) {
+  if (b.type === 'section') {
+    return `<div class="blk section" data-id="${b.id}">
+      <div class="s-title" contenteditable data-bind="title" data-ph="Введите текст для раздела…">${esc(b.title)}</div>
+    </div>`;
+  }
+  if (b.type === 'spacer') return `<div class="blk spacer" data-id="${b.id}"></div>`;
+  return `<div class="blk item${b === first ? ' isfirst' : ''}" data-id="${b.id}">
+    <div class="thumb" data-act="photo" title="Клик — заменить фото">${photoHtml(b.photo, 'ФОТО')}</div>
+    <div class="grow" style="min-width:0">
+      <div class="i-main">
+        <span class="i-name" contenteditable data-bind="name" data-ph="Наименование">${esc(b.name)}</span>
+        <span class="i-dots"></span>
+        <span class="i-price" contenteditable data-bind="price" data-ph="цена">${esc(b.price === '' ? '' : fmtPrice(b.price))}</span>
+      </div>
+      ${b.note || b._noteOpen ? `<div class="i-note" contenteditable data-bind="note" data-ph="примечание">${esc(b.note || '')}</div>` : ''}
+    </div>
+  </div>`;
+}
+
 function renderSheet() {
   const st = S.sheet;
+  const twoLists = st.mode === 'two';
 
-  $('#pTitle').textContent = st.title;
-  $('#pSub').textContent = st.sub;
-  $('#pFoot').textContent = st.foot;
-  $('#mainName').textContent = st.main.name;
-  $('#mainPrice').textContent = st.main.price === '' ? '' : fmtPrice(st.main.price);
-  $('#mainPhoto').innerHTML = photoHtml(st.main.photo, 'ФОТО');
+  const firstA = firstItem(st.blocks);
+  $('#body').innerHTML = st.blocks.map(b => blockHtml(b, firstA)).join('');
+  $('#mainPhotoA').innerHTML = photoHtml(firstA ? firstA.photo : '', 'ФОТО');
 
-  $('#body').innerHTML = st.blocks.map(b => {
-    if (b.type === 'section') {
-      return `<div class="blk section" data-id="${b.id}" draggable="true">
-        <div class="s-title" contenteditable data-bind="title" data-ph="Введите текст для раздела…">${esc(b.title)}</div>
-        <div class="ctrls">
-          <button data-act="up" title="Выше">↑</button>
-          <button data-act="down" title="Ниже">↓</button>
-          <button class="del" data-act="del" title="Удалить">✕</button>
-        </div></div>`;
-    }
-    if (b.type === 'spacer') {
-      return `<div class="blk spacer" data-id="${b.id}" draggable="true">
-        <div class="ctrls">
-          <button data-act="up">↑</button><button data-act="down">↓</button>
-          <button class="del" data-act="del">✕</button>
-        </div></div>`;
-    }
-    return `<div class="blk item" data-id="${b.id}" draggable="true">
-      <div class="thumb" data-act="photo" title="Клик — заменить фото">${photoHtml(b.photo, 'ФОТО')}</div>
-      <div class="grow" style="min-width:0">
-        <div class="i-main">
-          <span class="i-name" contenteditable data-bind="name" data-ph="Наименование">${esc(b.name)}</span>
-          <span class="i-dots"></span>
-          <span class="i-price" contenteditable data-bind="price" data-ph="цена">${esc(b.price === '' ? '' : fmtPrice(b.price))}</span>
-        </div>
-        ${b.note || b._noteOpen ? `<div class="i-note" contenteditable data-bind="note" data-ph="примечание">${esc(b.note || '')}</div>` : ''}
-      </div>
-      <div class="ctrls">
-        <button data-act="note" title="Примечание">≡</button>
-        <button data-act="photo" title="Фото">🖼</button>
-        <button data-act="up" title="Выше">↑</button>
-        <button data-act="down" title="Ниже">↓</button>
-        <button class="del" data-act="del" title="Удалить">✕</button>
-      </div></div>`;
-  }).join('');
+  const firstB = twoLists ? firstItem(st.blocks2) : null;
+  $('#bodyB').innerHTML = twoLists ? st.blocks2.map(b => blockHtml(b, firstB)).join('') : '';
+  $('#mainPhotoB').innerHTML = photoHtml(firstB ? firstB.photo : '', 'ФОТО');
+  $('[data-main="B"]').hidden = !twoLists;                  // при перетекании фото одно, вверху
 
+  $$('.panel').forEach(el => el.classList.toggle('active', twoLists && el.dataset.p === S.active));
+
+  reflow();
+  if (!TOOLS.hidden && !$(`.blk[data-id="${toolsId}"]`)) hideTools(true);
   checkOverflow();
+}
+
+/* Перенос хвоста списка во вторую половину («перетекание») */
+function reflow() {
+  const A = $('#body'), B = $('#bodyB');
+  if (S.sheet.mode !== 'flow') return;
+  while (B.firstChild) A.appendChild(B.firstChild);         // сначала собираем всё обратно
+  let guard = 2000;
+  while (A.children.length && A.scrollHeight > A.clientHeight + 1 && guard--) {
+    B.insertBefore(A.lastElementChild, B.firstChild);
+  }
+  $$('.panel').forEach(pan => { pan.scrollTop = 0; });
 }
 
 /* Если картинка не открылась (нет сети, битая ссылка) — показываем заглушку,
@@ -771,58 +850,61 @@ document.addEventListener('error', e => {
     img.replaceWith(d);
   }
 }, true);
+/* картинки меняют высоту строк — пересчитываем раскладку после загрузки */
+$('#sheet').addEventListener('load', e => {
+  if (e.target instanceof HTMLImageElement) { reflow(); checkOverflow(); }
+}, true);
 
 /* Переполнение половины листа */
 let ofTimer = 0;
 function checkOverflow() {
   clearTimeout(ofTimer);
   ofTimer = setTimeout(() => {
-    const panel = $('#panel'), bar = $('.addbar');
-    const vis = bar.style.display;
-    bar.style.display = 'none';                    // панель кнопок не печатается
-    const over = panel.scrollHeight > panel.clientHeight + 1 ||
-                 $('#body').scrollHeight > $('#body').clientHeight + 1;
-    bar.style.display = vis;
-    panel.classList.toggle('overflow', over);
+    let over = false;
+    $$('.panel').forEach(pan => {
+      if (pan.hidden) return;
+      const body = $('.p-body', pan);
+      const bad = pan.scrollHeight > pan.clientHeight + 1 || body.scrollHeight > body.clientHeight + 1;
+      pan.classList.toggle('overflow', bad);
+      over = over || bad;
+    });
     $('#overflowMsg').classList.toggle('on', over);
   }, 60);
 }
 
 /* --------------------------- Операции с блоками --------------------------- */
-const findBlock = id => S.sheet.blocks.find(b => b.id === id);
-const blockIndex = id => S.sheet.blocks.findIndex(b => b.id === id);
-
-function addItem(offer) {
+function addItem(offer, opts) {
+  opts = opts || {};
+  const list = opts.list || activeList();
   const b = offer
     ? { id: uid(), type: 'item', offerId: offer.id, name: offer.name, price: offer.price, note: '', photo: offer.picture }
     : { id: uid(), type: 'item', offerId: null, name: '', price: '', note: '', photo: '' };
-  S.sheet.blocks.push(b); save(); renderSheet();
+  if (opts.first) list.unshift(b); else list.push(b);
+  save(); renderSheet();
   if (!offer) focusBlock(b.id, '.i-name');
-  else scrollToBlock(b.id);
 }
-function addSection(title) {
+function addSection(title, list) {
   const b = { id: uid(), type: 'section', title: title || '' };
-  S.sheet.blocks.push(b); save(); renderSheet(); focusBlock(b.id, '.s-title');
+  (list || activeList()).push(b); save(); renderSheet(); focusBlock(b.id, '.s-title');
 }
 function focusBlock(id, sel) {
   const el = $(`.blk[data-id="${id}"] ${sel}`);
-  if (el) { el.focus(); scrollToBlock(id); }
+  // preventScroll обязателен: иначе панель (overflow:hidden) прокрутится
+  // и верхние строки половины уедут за край листа
+  if (el) el.focus({ preventScroll: true });
 }
-function scrollToBlock(id) {
-  const el = $(`.blk[data-id="${id}"]`);
-  if (el) el.scrollIntoView({ block: 'nearest' });
-}
+/* Страховка от любой прокрутки половины: лист всегда показывается целиком. */
+$$('.panel').forEach(pan => pan.addEventListener('scroll', () => {
+  pan.scrollTop = 0; pan.scrollLeft = 0;
+}));
 function move(id, dir) {
-  const i = blockIndex(id), j = i + dir;
-  if (i < 0 || j < 0 || j >= S.sheet.blocks.length) return;
-  const a = S.sheet.blocks;
+  const a = listOf(id), i = a.findIndex(b => b.id === id), j = i + dir;
+  if (i < 0 || j < 0 || j >= a.length) return;
   [a[i], a[j]] = [a[j], a[i]];
   save(); renderSheet();
 }
-function setMain(offer) {
-  S.sheet.main = { offerId: offer.id, name: offer.name, price: offer.price, photo: offer.picture };
-  save(); renderSheet();
-}
+/* «★» — поставить товар первым: он и займёт большое фото */
+function setMain(offer) { addItem(offer, { first: true }); }
 
 /* Фото: локальный файл сжимаем, чтобы не переполнить localStorage */
 let photoTarget = null;
@@ -851,54 +933,51 @@ function compress(file, maxSide = 520, quality = .82) {
 }
 
 /* --------------------------- Обработчики: лист --------------------------- */
-$('#body').addEventListener('click', e => {
-  const blk = e.target.closest('.blk'); if (!blk) return;
-  const id = blk.dataset.id;
-  const act = e.target.closest('[data-act]')?.dataset.act;
-  if (!act) return;
-  if (act === 'del') { S.sheet.blocks.splice(blockIndex(id), 1); save(); renderSheet(); }
-  else if (act === 'up') move(id, -1);
-  else if (act === 'down') move(id, 1);
-  else if (act === 'photo') pickPhoto({ kind: 'block', id });
-  else if (act === 'note') {
-    const b = findBlock(id); b._noteOpen = true; save(); renderSheet(); focusBlock(id, '.i-note');
+const SHEET = $('#sheet');
+
+/* выбор активной половины (режим двух прайсов) */
+SHEET.addEventListener('mousedown', e => {
+  const pan = e.target.closest('.panel');
+  if (!pan || S.sheet.mode !== 'two' || pan.dataset.p === S.active) return;
+  S.active = pan.dataset.p; save();
+  $$('.panel').forEach(el => el.classList.toggle('active', el.dataset.p === S.active));
+});
+
+SHEET.addEventListener('click', e => {
+  if (e.target.closest('.p-body') && e.target.closest('[data-act="photo"]')) {
+    pickPhoto({ kind: 'block', id: e.target.closest('.blk').dataset.id });
+    return;
+  }
+  const mb = e.target.closest('[data-main]');
+  if (mb) {                                   // большое фото = фото первой позиции половины
+    const list = listOfPanel(mb.dataset.main);
+    const b = firstItem(list);
+    if (!b) { alert('Сначала добавьте товар — его фото встанет сюда.'); return; }
+    pickPhoto({ kind: 'block', id: b.id });
+    return;
+  }
+  const add = e.target.closest('[data-add]');
+  if (add) {
+    const list = listOfPanel(add.dataset.p);
+    if (add.dataset.add === 'item') addItem(null, { list }); else addSection('', list);
   }
 });
 
 /* правка текста прямо на листе */
-$('#body').addEventListener('input', e => {
+SHEET.addEventListener('input', e => {
   const el = e.target.closest('[data-bind]'); if (!el) return;
   const b = findBlock(el.closest('.blk').dataset.id); if (!b) return;
-  const key = el.dataset.bind;
-  b[key] = el.textContent.trim();                  // id оффера сохраняем — цену можно будет сверить
-  save(); checkOverflow();
+  b[el.dataset.bind] = el.textContent.trim();   // id оффера сохраняем — цену можно будет сверить
+  save(); reflow(); checkOverflow();
 });
 /* при потере фокуса приводим цену к единому формату */
-$('#body').addEventListener('focusout', e => {
+SHEET.addEventListener('focusout', e => {
   const el = e.target.closest('[data-bind="price"]'); if (!el) return;
   const b = findBlock(el.closest('.blk').dataset.id); if (!b) return;
   const raw = el.textContent.replace(/[^\d.,\-]/g, '').trim();
   if (raw) { b.price = raw.replace(',', '.'); el.textContent = fmtPrice(b.price); }
   else { b.price = el.textContent.trim(); }
-  save(); checkOverflow();
-});
-
-/* заголовки/подвал/основной товар */
-[['#pTitle', 'title'], ['#pSub', 'sub'], ['#pFoot', 'foot']].forEach(([sel, key]) => {
-  $(sel).addEventListener('input', () => { S.sheet[key] = $(sel).textContent.trim(); save(); checkOverflow(); });
-});
-$('#mainName').addEventListener('input', () => { S.sheet.main.name = $('#mainName').textContent.trim(); save(); checkOverflow(); });
-$('#mainPrice').addEventListener('input', () => { S.sheet.main.price = $('#mainPrice').textContent.trim(); save(); checkOverflow(); });
-$('#mainPrice').addEventListener('focusout', () => {
-  const raw = $('#mainPrice').textContent.replace(/[^\d.,\-]/g, '').trim();
-  if (raw) { S.sheet.main.price = raw.replace(',', '.'); $('#mainPrice').textContent = fmtPrice(S.sheet.main.price); save(); }
-});
-$('#mainBlock').addEventListener('click', e => {
-  const act = e.target.closest('[data-act]')?.dataset.act;
-  if (act === 'mainphoto' || e.target.closest('#mainPhoto')) pickPhoto({ kind: 'main' });
-  else if (act === 'mainclear') {
-    S.sheet.main = { offerId: null, name: '', price: '', photo: '' }; save(); renderSheet();
-  }
+  save(); reflow(); checkOverflow();
 });
 
 /* вставка только текстом — чтобы на лист не попадала чужая вёрстка */
@@ -910,7 +989,7 @@ document.addEventListener('paste', e => {
 });
 /* Enter в строке листа не должен плодить <div> */
 document.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && e.target.closest('#panel [contenteditable]')) { e.preventDefault(); e.target.blur(); }
+  if (e.key === 'Enter' && e.target.closest('.panel [contenteditable]')) { e.preventDefault(); e.target.blur(); }
 });
 
 /* выбранный файл фото */
@@ -918,47 +997,158 @@ $('#photoPicker').addEventListener('change', async e => {
   const f = e.target.files[0]; if (!f || !photoTarget) return;
   try {
     const data = await compress(f);
-    if (photoTarget.kind === 'main') S.sheet.main.photo = data;
-    else { const b = findBlock(photoTarget.id); if (b) b.photo = data; }
+    const b = findBlock(photoTarget.id); if (b) b.photo = data;
     save(); renderSheet();
   } catch (err) { alert('Не удалось загрузить изображение: ' + err.message); }
   photoTarget = null;
 });
 
-/* перетаскивание позиций */
+/* ---- Панель кнопок позиции: наведите на строку ---- */
+const TOOLS = $('#blkTools');
+let toolsId = null, hideTimer = 0;
+
+function showTools(blk) {
+  const b = findBlock(blk.dataset.id); if (!b) return;
+  clearTimeout(hideTimer);
+  toolsId = b.id;
+  $$('.blk').forEach(x => x.classList.toggle('hot', x === blk));
+  $$('[data-only="item"]', TOOLS).forEach(el => { el.hidden = b.type !== 'item'; });
+  TOOLS.hidden = false;
+  const r = blk.getBoundingClientRect();
+  const sr = SHEET.getBoundingClientRect();
+  const tw = TOOLS.offsetWidth, th = TOOLS.offsetHeight;
+  // кнопки держим за пределами листа, чтобы не закрывать товары второй половины
+  let left = sr.right + 10;
+  if (left + tw > innerWidth - 6) left = sr.left - tw - 10;
+  if (left < 6) left = Math.max(6, blk.getBoundingClientRect().right - tw - 4);
+  TOOLS.style.left = Math.round(left) + 'px';
+  TOOLS.style.top = Math.round(Math.min(innerHeight - th - 6,
+    Math.max(6, r.top + r.height / 2 - th / 2))) + 'px';
+}
+function hideTools(now) {
+  clearTimeout(hideTimer);
+  hideTimer = setTimeout(() => {
+    TOOLS.hidden = true; toolsId = null;
+    $$('.blk').forEach(x => x.classList.remove('hot'));
+  }, now ? 0 : 220);
+}
+SHEET.addEventListener('mouseover', e => {
+  const blk = e.target.closest('.blk'); if (blk) showTools(blk);
+});
+SHEET.addEventListener('focusin', e => {
+  const blk = e.target.closest('.blk'); if (blk) showTools(blk);
+});
+SHEET.addEventListener('mouseleave', () => hideTools());
+TOOLS.addEventListener('mouseenter', () => clearTimeout(hideTimer));
+TOOLS.addEventListener('mouseleave', () => hideTools());
+$('#stage').addEventListener('scroll', () => hideTools(true));
+
+TOOLS.addEventListener('click', e => {
+  const act = e.target.closest('[data-act]')?.dataset.act;
+  const id = toolsId; if (!act || !id || act === 'grip') return;
+  if (act === 'del') {
+    const a = listOf(id); a.splice(a.findIndex(b => b.id === id), 1);
+    save(); renderSheet(); hideTools(true);
+  }
+  else if (act === 'up') { move(id, -1); keepTools(id); }
+  else if (act === 'down') { move(id, 1); keepTools(id); }
+  else if (act === 'photo') pickPhoto({ kind: 'block', id });
+  else if (act === 'note') {
+    const b = findBlock(id); b._noteOpen = true; save(); renderSheet(); focusBlock(id, '.i-note');
+  }
+});
+function keepTools(id) {
+  const blk = $(`.blk[data-id="${id}"]`);
+  if (blk) showTools(blk); else hideTools(true);
+}
+
+/* ---- Перетаскивание позиций (в том числе между половинами) ---- */
+function dropSpot(x, y) {
+  let over = null, before = false;
+  for (const el of $$('.blk')) {
+    const r = el.getBoundingClientRect();
+    if (y >= r.top - 2 && y <= r.bottom + 2 && x >= r.left - 40 && x <= r.right + 40) {
+      over = el; before = y < r.top + r.height / 2; break;
+    }
+  }
+  if (!over) {                       // мимо строк — в конец списка той половины, где курсор
+    const pan = document.elementsFromPoint(x, y).find(el => el.classList && el.classList.contains('panel'));
+    const body = pan && $('.p-body', pan);
+    if (body && body.lastElementChild) { over = body.lastElementChild; before = false; }
+  }
+  return { over, before };
+}
+function markDrop(spot, dragId) {
+  $$('.blk').forEach(b => b.classList.remove('drop-before', 'drop-after'));
+  if (spot.over && spot.over.dataset.id !== dragId)
+    spot.over.classList.add(spot.before ? 'drop-before' : 'drop-after');
+}
+function applyDrop(spot, dragId) {
+  $$('.blk').forEach(b => b.classList.remove('drop-before', 'drop-after'));
+  if (!spot.over || spot.over.dataset.id === dragId) return;
+  const item = findBlock(dragId), target = findBlock(spot.over.dataset.id);
+  if (!item || !target) return;
+  const from = listOf(dragId), to = listOf(target.id);
+  from.splice(from.indexOf(item), 1);
+  const at = to.indexOf(target);
+  to.splice(spot.before ? at : at + 1, 0, item);
+  save(); renderSheet();
+}
+
+$('.grip', TOOLS).addEventListener('pointerdown', e => {
+  const id = toolsId; if (!id) return;
+  e.preventDefault();
+  const grip = e.currentTarget;
+  grip.setPointerCapture(e.pointerId);
+  document.body.style.userSelect = 'none';
+  TOOLS.hidden = true;
+  const src = $(`.blk[data-id="${id}"]`);
+  if (src) src.classList.add('dragging');
+
+  const move = ev => markDrop(dropSpot(ev.clientX, ev.clientY), id);
+  const up = ev => {
+    grip.removeEventListener('pointermove', move);
+    grip.removeEventListener('pointerup', up);
+    grip.removeEventListener('pointercancel', up);
+    document.body.style.userSelect = '';
+    if (src) src.classList.remove('dragging');
+    applyDrop(dropSpot(ev.clientX, ev.clientY), id);
+    hideTools(true);
+  };
+  grip.addEventListener('pointermove', move);
+  grip.addEventListener('pointerup', up);
+  grip.addEventListener('pointercancel', up);
+});
+
+/* ---- То же мышью прямо по строке (кроме текста) ---- */
 let dragId = null;
-$('#body').addEventListener('dragstart', e => {
+SHEET.addEventListener('mousedown', e => {
+  const blk = e.target.closest('.blk'); if (!blk) return;
+  blk.draggable = !e.target.closest('[contenteditable]');
+});
+SHEET.addEventListener('dragstart', e => {
   const blk = e.target.closest('.blk'); if (!blk) return;
   dragId = blk.dataset.id; blk.classList.add('dragging');
+  TOOLS.hidden = true;
   e.dataTransfer.effectAllowed = 'move';
   e.dataTransfer.setData('text/plain', dragId);
 });
-$('#body').addEventListener('dragend', () => {
+SHEET.addEventListener('dragend', () => {
   dragId = null;
-  $$('.blk').forEach(b => b.classList.remove('dragging', 'drop'));
+  $$('.blk').forEach(b => { b.classList.remove('dragging', 'drop-before', 'drop-after'); b.draggable = false; });
 });
-$('#body').addEventListener('dragover', e => {
+SHEET.addEventListener('dragover', e => {
   if (!dragId) return;
   e.preventDefault();
-  const over = e.target.closest('.blk');
-  $$('.blk').forEach(b => b.classList.toggle('drop', b === over && b.dataset.id !== dragId));
+  markDrop(dropSpot(e.clientX, e.clientY), dragId);
 });
-$('#body').addEventListener('drop', e => {
+SHEET.addEventListener('drop', e => {
   if (!dragId) return;
   e.preventDefault();
-  const over = e.target.closest('.blk');
-  $$('.blk').forEach(b => b.classList.remove('drop'));
-  if (!over || over.dataset.id === dragId) return;
-  const a = S.sheet.blocks;
-  const from = blockIndex(dragId);
-  const item = a.splice(from, 1)[0];
-  a.splice(blockIndex(over.dataset.id), 0, item);
-  save(); renderSheet();
+  applyDrop(dropSpot(e.clientX, e.clientY), dragId);
 });
 
-/* кнопки «+» на листе и в тулбаре */
-$('#addItem').addEventListener('click', () => addItem(null));
-$('#addSection').addEventListener('click', () => addSection(''));
+/* кнопки «+» в верхней панели — в активную половину */
 $('#addItemTop').addEventListener('click', () => addItem(null));
 $('#addSectionTop').addEventListener('click', () => addSection(''));
 
@@ -1008,8 +1198,7 @@ $('#refreshPrices').addEventListener('click', async () => {
     obj.price = o.price; obj.name = obj.name || o.name;
     if (o.picture && (!obj.photo || !obj.photo.startsWith('data:'))) obj.photo = o.picture;
   };
-  apply(S.sheet.main);
-  S.sheet.blocks.forEach(b => { if (b.type === 'item') apply(b); });
+  allLists().forEach(l => l.forEach(b => { if (b.type === 'item') apply(b); }));
   save(); renderSheet();
   setStatus('Цены обновлены. Изменено: ' + upd + (miss ? ', не найдено в YML: ' + miss : ''), miss ? 'warn' : 'ok');
 });
@@ -1028,7 +1217,17 @@ bindRange('#gap', 'gap', '#gapVal', 1);
 bindRange('#th', 'thumb', '#thVal', 0);
 bindRange('#mw', 'mainw', '#mwVal', 0);
 
-$('#half').addEventListener('change', () => { S.sheet.half = $('#half').value; applyGeometry(); save(); checkOverflow(); });
+function setLayout() {
+  S.sheet.orient = $('#orient').value;
+  S.sheet.mode = $('#mode').value;
+  S.sheet.half = $('#half').value;
+  if (S.sheet.mode !== 'two') S.active = 'A';
+  $('#halfRow').style.display = S.sheet.mode === 'one' ? 'flex' : 'none';
+  save(); applyGeometry(); renderSheet();
+}
+$('#orient').addEventListener('change', setLayout);
+$('#mode').addEventListener('change', setLayout);
+$('#half').addEventListener('change', setLayout);
 $('#foldPrint').addEventListener('change', () => { S.sheet.foldPrint = $('#foldPrint').checked; applyGeometry(); save(); });
 $('#showPhoto').addEventListener('change', () => { S.sheet.showPhoto = $('#showPhoto').checked; applyGeometry(); save(); checkOverflow(); });
 $('#showDots').addEventListener('change', () => { S.sheet.showDots = $('#showDots').checked; applyGeometry(); save(); });
@@ -1057,7 +1256,8 @@ function renderSaves() {
     ? list.map((s, i) => `
       <div class="hit">
         <div class="t"><div class="n">${esc(s.name)}</div>
-        <div class="m">${new Date(s.at).toLocaleString('ru-RU')} · позиций: ${(s.sheet.blocks || []).filter(b => b.type === 'item').length}</div></div>
+        <div class="m">${new Date(s.at).toLocaleString('ru-RU')} · позиций: ${
+          [...(s.sheet.blocks || []), ...(s.sheet.blocks2 || [])].filter(b => b.type === 'item').length}</div></div>
         <button class="btn sm" data-i="${i}" data-act="open">Открыть</button>
         <button class="btn sm" data-i="${i}" data-act="rm">✕</button>
       </div>`).join('')
@@ -1074,7 +1274,7 @@ $('#saveList').addEventListener('click', e => {
   const btn = e.target.closest('[data-act]'); if (!btn) return;
   const list = getSaves(), i = +btn.dataset.i;
   if (btn.dataset.act === 'open') {
-    S.sheet = Object.assign(DEFAULT_SHEET(), list[i].sheet);
+    S.sheet = migrateSheet(list[i].sheet);
     save(); syncControls(); applyGeometry(); renderSheet();
   } else if (confirm('Удалить шаблон «' + list[i].name + '»?')) {
     list.splice(i, 1); setSaves(list);
@@ -1095,7 +1295,7 @@ $('#importFile').addEventListener('change', e => {
   fr.onload = () => {
     try {
       const d = JSON.parse(fr.result);
-      if (d.sheet) S.sheet = Object.assign(DEFAULT_SHEET(), d.sheet);
+      if (d.sheet) S.sheet = migrateSheet(d.sheet);
       if (d.yml) S.yml = Object.assign(S.yml, d.yml);
       save(); syncControls(); applyGeometry(); renderSheet();
     } catch (err) { alert('Файл не читается: ' + err.message); }
@@ -1110,7 +1310,10 @@ $('#clearAll').addEventListener('click', () => {
 /* --------------------------- Старт --------------------------- */
 function syncControls() {
   const st = S.sheet;
+  $('#orient').value = st.orient;
+  $('#mode').value = st.mode;
   $('#half').value = st.half;
+  $('#halfRow').style.display = st.mode === 'one' ? 'flex' : 'none';
   $('#foldPrint').checked = !!st.foldPrint;
   $('#fs').value = st.fs;   $('#fsVal').textContent = st.fs.toFixed(1);
   $('#pad').value = st.pad; $('#padVal').textContent = st.pad.toFixed(1);
