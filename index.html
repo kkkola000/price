@@ -258,7 +258,7 @@ body.nophoto .thumb{display:none}
     <section class="pane active" id="pane-feed">
       <label class="f">Ссылка на YML (прайс-лист)</label>
       <div class="row">
-        <input type="url" id="ymlUrl" class="grow" placeholder="https://site.ru/price.yml">
+        <input type="url" id="ymlUrl" class="grow" autocomplete="off" placeholder="https://site.ru/price.yml">
         <button class="btn primary" id="loadUrl">Загрузить</button>
       </div>
 
@@ -286,7 +286,7 @@ body.nophoto .thumb{display:none}
       </div>
       <details style="margin-top:8px">
         <summary class="hint" style="cursor:pointer">Вставить XML текстом</summary>
-        <textarea id="ymlPaste" rows="4" placeholder="&lt;yml_catalog&gt;…" style="margin-top:6px"></textarea>
+        <textarea id="ymlPaste" rows="4" autocomplete="off" placeholder="&lt;yml_catalog&gt;…" style="margin-top:6px"></textarea>
         <button class="btn sm" id="loadPaste" style="margin-top:6px">Разобрать</button>
       </details>
 
@@ -304,13 +304,13 @@ body.nophoto .thumb{display:none}
     <section class="pane" id="pane-catalog">
       <div id="catInfo" class="status" style="margin-bottom:10px">Прайс не подключён</div>
       <label class="f">Поиск товара (название, артикул, id)</label>
-      <input type="text" id="q" placeholder="Введите минимум 2 символа…">
+      <input type="text" id="q" autocomplete="off" placeholder="Название, артикул или id (от 2 символов)">
       <div class="row" style="margin-top:6px">
         <select id="catFilter" class="grow"><option value="">Все категории</option></select>
       </div>
       <div class="hint" style="margin-top:6px">
-        Клик по карточке — добавить в конец списка. Кнопка «★» — поставить первым:
-        фото первой позиции печатается крупно вверху листа.
+        Без запроса показан весь каталог. Клик по карточке — добавить в конец списка,
+        «★» — поставить первым: фото первой позиции печатается крупно вверху листа.
       </div>
       <div id="results"></div>
     </section>
@@ -395,9 +395,9 @@ body.nophoto .thumb{display:none}
       <div class="sep"></div>
       <button class="btn" id="clearAll" style="width:100%;color:#b91c1c">Очистить лист</button>
       <div class="hint" style="margin-top:10px">
-        <b>Список товаров не сохраняется между сеансами:</b> при перезагрузке страницы лист
-        открывается чистым. Чтобы вернуться к прайсу позже, сохраните его шаблоном
-        или выгрузите в файл. Настройки листа и ссылка на YML запоминаются.
+        <b>После перезагрузки страницы панель пуста:</b> товары, ссылка на прайс, загруженный
+        каталог и настройки листа не сохраняются. Чтобы вернуться к работе позже, сохраните
+        её шаблоном (он остаётся в этом браузере) или выгрузите в файл.
       </div>
     </section>
   </aside>
@@ -508,18 +508,10 @@ let S = {
 
 let CATALOG = { offers: [], byId: new Map(), cats: new Map(), currency: '' };
 
-/* Между сессиями храним только настройки: раскладку листа, размеры, ссылку на
-   прайс. Сами товары не переживают перезагрузку — лист всегда открывается
-   чистым, а нужный список сохраняется вручную во вкладке «Шаблоны». */
-function save() {
-  try {
-    const keep = Object.assign({}, S, {
-      sheet: Object.assign({}, S.sheet, { blocks: [], blocks2: [] }),
-      active: 'A'
-    });
-    localStorage.setItem(LS_STATE, JSON.stringify(keep));
-  } catch (e) { console.warn('Не удалось сохранить настройки', e); }
-}
+/* Ничего не переносится между сеансами: ни товары, ни ссылка на прайс, ни
+   настройки листа. Панель всегда открывается чистой, а сохранить работу можно
+   только осознанно — шаблоном или выгрузкой в файл на вкладке «Шаблоны». */
+function save() { /* состояние живёт только в памяти вкладки */ }
 /* Приводит лист любого возраста к текущей схеме. */
 function migrateSheet(src) {
   const st = Object.assign(DEFAULT_SHEET(), src || {});
@@ -546,17 +538,8 @@ function migrateSheet(src) {
 }
 
 function load() {
-  try {
-    const raw = localStorage.getItem(LS_STATE);
-    if (!raw) return;
-    const d = JSON.parse(raw);
-    S = {
-      yml: Object.assign({ url: '', proxy: '', proxyCustom: '' }, d.yml),
-      sheet: migrateSheet(d.sheet),
-      active: d.active === 'B' ? 'B' : 'A',
-      zoom: d.zoom || 0
-    };
-  } catch (e) { console.warn('Состояние повреждено, начинаем с чистого листа', e); }
+  try { localStorage.removeItem(LS_STATE); }   // подчищаем данные прошлых версий панели
+  catch (e) { /* приватный режим — хранилища и так нет */ }
 }
 
 /* --------------------------- Цены и валюта --------------------------- */
@@ -789,6 +772,7 @@ function applyCatalog(data, sourceLabel) {
     (sourceLabel ? '. Источник: ' + esc(sourceLabel) : ''), 'ok');
   setCatInfo();
   renderSheet();
+  shown = PAGE;
   doSearch();
 }
 
@@ -800,6 +784,10 @@ function parseYml(text, label) {
 
 /* --------------------------- Поиск по каталогу --------------------------- */
 let searchTimer = 0;
+const PAGE = 60;                       // сколько карточек показываем за раз
+let shown = PAGE;
+
+/* Без запроса и без категории показываем весь каталог — списком с догрузкой. */
 function doSearch() {
   const box = $('#results');
   const q = $('#q').value.trim().toLowerCase();
@@ -808,20 +796,27 @@ function doSearch() {
     box.innerHTML = '<div class="hint">Сначала подключите прайс на вкладке «Прайс».</div>';
     return;
   }
-  if (q.length < 2 && !cat) {
-    box.innerHTML = '<div class="hint">Введите запрос или выберите категорию.</div>';
-    return;
-  }
-  const words = q.split(/\s+/).filter(Boolean);
+  const words = q.length >= 2 ? q.split(/\s+/).filter(Boolean) : [];
   const hits = [];
   for (const o of CATALOG.offers) {
     if (cat && o.catId !== cat) continue;
     if (words.length && !words.every(w => o._s.includes(w))) continue;
     hits.push(o);
-    if (hits.length >= 60) break;
   }
   if (!hits.length) { box.innerHTML = '<div class="hint">Ничего не найдено.</div>'; return; }
-  box.innerHTML = hits.map(o => `
+
+  const page = hits.slice(0, shown);
+  const head = '<div class="hint" style="margin-bottom:2px">' +
+    (hits.length > page.length
+      ? 'Показано ' + page.length + ' из ' + hits.length + ' товаров'
+      : 'Товаров: ' + hits.length) +
+    (q.length === 1 ? ' · для поиска введите минимум 2 символа' : '') + '</div>';
+  const more = hits.length > page.length
+    ? '<button class="btn" id="moreHits" style="width:100%;margin-top:4px">Показать ещё ' +
+      Math.min(PAGE, hits.length - page.length) + '</button>'
+    : '';
+
+  box.innerHTML = head + page.map(o => `
     <div class="hit" data-id="${esc(o.id)}">
       ${o.picture
         ? `<img src="${esc(o.picture)}" alt="" loading="lazy" referrerpolicy="no-referrer">`
@@ -835,8 +830,10 @@ function doSearch() {
         <button class="btn sm" data-act="add" title="Добавить позицией">+</button>
         <button class="btn sm" data-act="main" title="Сделать основным товаром">★</button>
       </div>
-    </div>`).join('');
+    </div>`).join('') + more;
 }
+/* сброс постраничной выдачи при смене условий поиска */
+function resetSearch() { shown = PAGE; doSearch(); }
 
 /* --------------------------- Геометрия листа --------------------------- */
 const A4 = { long: 297, short: 210 };
@@ -1354,8 +1351,11 @@ $('#results').addEventListener('click', e => {
   const act = e.target.closest('[data-act]')?.dataset.act;
   if (act === 'main') setMain(offer); else addItem(offer);
 });
-$('#q').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(doSearch, 150); });
-$('#catFilter').addEventListener('change', doSearch);
+$('#q').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(resetSearch, 150); });
+$('#catFilter').addEventListener('change', resetSearch);
+$('#results').addEventListener('click', e => {
+  if (e.target.closest('#moreHits')) { shown += PAGE; doSearch(); }
+});
 
 async function loadUrlAndGo() {
   if (await fetchYml($('#ymlUrl').value.trim())) goTab('catalog');
@@ -1540,14 +1540,17 @@ function syncControls() {
 }
 
 load();
+/* Браузер сам восстанавливает значения полей при перезагрузке — чистим вручную,
+   иначе ссылка на прайс и запрос остались бы на экране. */
+['#ymlUrl', '#ymlPaste', '#proxyCustom', '#q', '#saveName', '#ymlFile'].forEach(sel => {
+  const el = $(sel); if (el) el.value = '';
+});
 syncControls();
 applyGeometry();
 renderSheet();
 renderSaves();
 setCatInfo();
 doSearch();
-// ссылка сохранена — подтягиваем прайс и сразу открываем каталог
-if (S.yml.url) fetchYml(S.yml.url, true).then(ok => { if (ok) goTab('catalog'); });
 </script>
 </body>
 </html>
