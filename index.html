@@ -345,8 +345,8 @@ body.nophoto .thumb{display:none}
 
       <div class="sep"></div>
 
-      <label class="f">Размер шрифта: <b id="fsVal">3.6</b> мм</label>
-      <input type="range" id="fs" min="2.4" max="6" step="0.1" value="3.6" style="width:100%;padding:0">
+      <label class="f">Размер шрифта: <b id="fsVal">4.5</b> мм</label>
+      <input type="range" id="fs" min="2.4" max="6" step="0.1" value="4.5" style="width:100%;padding:0">
       <label class="f" style="margin-top:8px">Поля панели: <b id="padVal">8</b> мм</label>
       <input type="range" id="pad" min="3" max="20" step="0.5" value="8" style="width:100%;padding:0">
       <label class="f" style="margin-top:8px">Интервал между строками: <b id="gapVal">2.5</b> мм</label>
@@ -498,7 +498,7 @@ const DEFAULT_SHEET = () => ({
   mode: 'flow',             // one | two | flow
   half: 'first',            // какая половина работает в режиме one
   foldPrint: false,
-  fs: 3.6, pad: 8, gap: 2.5, thumb: 12, mainw: 45,
+  fs: 4.5, pad: 8, gap: 2.5, thumb: 12, mainw: 45,
   showPhoto: true, showDots: true, cur: 'auto',
   blocks: [], blocks2: []
 });
@@ -1212,12 +1212,20 @@ function showTools(blk) {
   TOOLS.hidden = false;
   const r = blk.getBoundingClientRect();
   const sr = SHEET.getBoundingClientRect();
+  const pr = blk.closest('.panel').getBoundingClientRect();
   const tw = TOOLS.offsetWidth, th = TOOLS.offsetHeight;
-  // кнопки держим за пределами листа, чтобы не закрывать товары второй половины
-  let left = sr.right + 10;
-  if (left + tw > innerWidth - 6) left = sr.left - tw - 10;
-  if (left < 6) left = Math.max(6, blk.getBoundingClientRect().right - tw - 4);
-  TOOLS.style.left = Math.round(left) + 'px';
+  const GAP = 10;
+  // Кнопки ставим вплотную к листу — с той его стороны, которая ближе к строке,
+  // и всегда снаружи, чтобы не закрывать товары соседней половины.
+  const st = $('#stage').getBoundingClientRect();
+  const nearLeft = (pr.left - sr.left) <= (sr.right - pr.right);
+  let left = nearLeft ? sr.left - tw - GAP : sr.right + GAP;
+  // снаружи ставим, только если хватает свободного поля рядом с листом,
+  // иначе прижимаем к внешнему краю своей половины — на соседнюю не заезжаем
+  if (left < st.left + 4 || left + tw > st.right - 4) {
+    left = nearLeft ? pr.left + 4 : pr.right - tw - 4;
+  }
+  TOOLS.style.left = Math.round(Math.min(innerWidth - tw - 6, Math.max(6, left))) + 'px';
   TOOLS.style.top = Math.round(Math.min(innerHeight - th - 6,
     Math.max(6, r.top + r.height / 2 - th / 2))) + 'px';
 }
