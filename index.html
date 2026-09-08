@@ -164,6 +164,10 @@ body.nophoto .thumb{display:none}
 .i-price{font-size:var(--fs);font-weight:700;white-space:nowrap}
 .i-note{font-size:calc(var(--fs) * .78);color:#555;line-height:1.15;margin-top:.4mm}
 .blk.spacer{height:var(--fs)}
+.blk.qr{display:flex;flex-direction:column;align-items:center;gap:1mm;text-align:center}
+.blk.qr svg{display:block}
+.qr-cap{font-size:calc(var(--fs) * .8);line-height:1.2;max-width:90%;min-height:1em}
+.qr-err{font-size:calc(var(--fs) * .8);color:#b91c1c}
 @media screen{
   /* на экране помечаем позицию, чьё фото уходит в большую картинку */
   .blk.item.isfirst .thumb{outline:.4mm solid #93c5fd;outline-offset:.3mm}
@@ -355,6 +359,8 @@ body.nophoto .thumb{display:none}
       <input type="range" id="th" min="6" max="28" step="1" value="12" style="width:100%;padding:0">
       <label class="f" style="margin-top:8px">Фото основного товара: <b id="mwVal">45</b> мм</label>
       <input type="range" id="mw" min="20" max="110" step="1" value="45" style="width:100%;padding:0">
+      <label class="f" style="margin-top:8px">Размер QR-кода: <b id="qrVal">30</b> мм</label>
+      <input type="range" id="qrSize" min="12" max="70" step="1" value="30" style="width:100%;padding:0">
 
       <div class="sep"></div>
       <div class="row wrap">
@@ -409,6 +415,7 @@ body.nophoto .thumb{display:none}
       <button class="btn primary" id="print">🖨 Печать / PDF</button>
       <button class="btn" id="addItemTop">+ Позиция</button>
       <button class="btn" id="addSectionTop">+ Раздел</button>
+      <button class="btn" id="addQrTop">+ QR</button>
       <span class="grow"></span>
       <span class="hint">Масштаб</span>
       <button class="btn sm" id="zoomOut">−</button>
@@ -440,6 +447,8 @@ body.nophoto .thumb{display:none}
             <span class="lbl">позиция</span>
             <button class="addbtn" data-add="section" data-p="A" title="Добавить раздел">+</button>
             <span class="lbl">раздел</span>
+            <button class="addbtn" data-add="qr" data-p="A" title="Добавить QR-код">+</button>
+            <span class="lbl">QR</span>
           </div>
         </div>
 
@@ -455,6 +464,8 @@ body.nophoto .thumb{display:none}
             <span class="lbl">позиция</span>
             <button class="addbtn" data-add="section" data-p="B" title="Добавить раздел">+</button>
             <span class="lbl">раздел</span>
+            <button class="addbtn" data-add="qr" data-p="B" title="Добавить QR-код">+</button>
+            <span class="lbl">QR</span>
           </div>
         </div>
       </div>
@@ -467,6 +478,7 @@ body.nophoto .thumb{display:none}
   <button data-act="up" title="Переместить выше">↑</button>
   <button data-act="down" title="Переместить ниже">↓</button>
   <button data-act="photo" data-only="item" title="Заменить фото">🖼</button>
+  <button data-act="qr" data-only="item" title="QR со ссылкой на товар">▦</button>
   <button data-act="note" data-only="item" title="Примечание">≡</button>
   <button class="del" data-act="del" title="Удалить">✕</button>
 </div>
@@ -498,7 +510,7 @@ const DEFAULT_SHEET = () => ({
   mode: 'flow',             // one | two | flow
   half: 'first',            // какая половина работает в режиме one
   foldPrint: false,
-  fs: 6, pad: 8, gap: 2.5, thumb: 12, mainw: 45,
+  fs: 6, pad: 8, gap: 2.5, thumb: 12, mainw: 45, qrSize: 30,
   showPhoto: true, showDots: true, cur: 'auto',
   blocks: [], blocks2: []
 });
@@ -562,6 +574,211 @@ function fmtPrice(v) {
   const s = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(n);
   const c = curSymbol();
   return c ? s + ' ' + c : s;
+}
+
+/* Кодировщик QR: байтовый режим, уровень коррекции M, версии 1..15.
+   Возвращает матрицу модулей (массив строк из 0/1). Внешних библиотек нет —
+   иначе QR не появился бы при печати без интернета. */
+function qrMatrix(text) {
+  // [версия, EC-слов на блок, блоков группы 1, данных в блоке, блоков группы 2, данных в блоке]
+  const SPEC = [
+    [1, 10, 1, 16, 0, 0], [2, 16, 1, 28, 0, 0], [3, 26, 1, 44, 0, 0], [4, 18, 2, 32, 0, 0],
+    [5, 24, 2, 43, 0, 0], [6, 16, 4, 27, 0, 0], [7, 18, 4, 31, 0, 0], [8, 22, 2, 38, 2, 39],
+    [9, 22, 3, 36, 2, 37], [10, 26, 4, 43, 1, 44], [11, 30, 1, 50, 4, 51], [12, 22, 6, 36, 2, 37],
+    [13, 22, 8, 37, 1, 38], [14, 24, 4, 40, 5, 41], [15, 24, 5, 41, 5, 42]
+  ];
+  const ALIGN = [null, [], [6, 18], [6, 22], [6, 26], [6, 30], [6, 34], [6, 22, 38], [6, 24, 42],
+    [6, 26, 46], [6, 28, 50], [6, 30, 54], [6, 32, 58], [6, 34, 62], [6, 26, 46, 66], [6, 26, 48, 70]];
+
+  /* --- арифметика Галуа GF(256) --- */
+  const EXP = new Uint8Array(512), LOG = new Uint8Array(256);
+  for (let i = 0, x = 1; i < 255; i++) { EXP[i] = x; LOG[x] = i; x <<= 1; if (x & 0x100) x ^= 0x11d; }
+  for (let i = 255; i < 512; i++) EXP[i] = EXP[i - 255];
+  const mul = (a, b) => (a && b) ? EXP[LOG[a] + LOG[b]] : 0;
+
+  const bytes = new TextEncoder().encode(text);
+  const spec = SPEC.find(s => {
+    const dataCw = s[2] * s[3] + s[4] * s[5];
+    return bytes.length <= ((dataCw * 8 - 4 - (s[0] < 10 ? 8 : 16)) >> 3);
+  });
+  if (!spec) throw new Error('Слишком длинная ссылка для QR-кода');
+  const [ver, ecLen, g1, d1, g2, d2] = spec;
+  const dataCw = g1 * d1 + g2 * d2;
+
+  /* --- поток данных --- */
+  const bits = [];
+  const push = (v, n) => { for (let i = n - 1; i >= 0; i--) bits.push((v >> i) & 1); };
+  push(4, 4);
+  push(bytes.length, ver < 10 ? 8 : 16);
+  for (const b of bytes) push(b, 8);
+  for (let i = 0; i < 4 && bits.length < dataCw * 8; i++) bits.push(0);
+  while (bits.length % 8) bits.push(0);
+  for (let p = 0; bits.length < dataCw * 8; p++) push(p & 1 ? 0x11 : 0xEC, 8);
+  const dataBytes = [];
+  for (let i = 0; i < bits.length; i += 8) {
+    let b = 0; for (let j = 0; j < 8; j++) b = (b << 1) | bits[i + j];
+    dataBytes.push(b);
+  }
+
+  /* --- коррекция ошибок Рида — Соломона --- */
+  let gen = [1];
+  for (let i = 0; i < ecLen; i++) {
+    const next = new Array(gen.length + 1).fill(0);
+    for (let a = 0; a < gen.length; a++) {
+      next[a] ^= mul(gen[a], 1);
+      next[a + 1] ^= mul(gen[a], EXP[i]);
+    }
+    gen = next;
+  }
+  const blocks = [], ecBlocks = [];
+  let off = 0;
+  for (let i = 0; i < g1 + g2; i++) {
+    const n = i < g1 ? d1 : d2;
+    const blk = dataBytes.slice(off, off + n); off += n;
+    const buf = blk.concat(new Array(ecLen).fill(0));
+    for (let k = 0; k < blk.length; k++) {
+      const f = buf[k]; if (!f) continue;
+      for (let j = 1; j < gen.length; j++) buf[k + j] ^= mul(gen[j], f);
+    }
+    blocks.push(blk); ecBlocks.push(buf.slice(blk.length));
+  }
+  const stream = [];
+  for (let i = 0; i < Math.max(d1, d2); i++) for (const b of blocks) if (i < b.length) stream.push(b[i]);
+  for (let i = 0; i < ecLen; i++) for (const e of ecBlocks) stream.push(e[i]);
+
+  /* --- каркас символа --- */
+  const size = ver * 4 + 17;
+  const mod = Array.from({ length: size }, () => new Uint8Array(size));
+  const fix = Array.from({ length: size }, () => new Uint8Array(size));
+  const put = (r, c, v) => { if (r >= 0 && c >= 0 && r < size && c < size) { mod[r][c] = v; fix[r][c] = 1; } };
+
+  const finder = (r, c) => {
+    for (let i = -1; i <= 7; i++) for (let j = -1; j <= 7; j++) {
+      const on = (i >= 0 && i <= 6 && (j === 0 || j === 6)) ||
+                 (j >= 0 && j <= 6 && (i === 0 || i === 6)) ||
+                 (i >= 2 && i <= 4 && j >= 2 && j <= 4);
+      put(r + i, c + j, on ? 1 : 0);
+    }
+  };
+  finder(0, 0); finder(0, size - 7); finder(size - 7, 0);
+  for (let i = 8; i < size - 8; i++) { put(6, i, i % 2 ? 0 : 1); put(i, 6, i % 2 ? 0 : 1); }
+  const coords = ALIGN[ver];
+  for (const r of coords) for (const c of coords) {
+    if ((r <= 8 && c <= 8) || (r <= 8 && c >= size - 9) || (r >= size - 9 && c <= 8)) continue;
+    for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++)
+      put(r + i, c + j, Math.max(Math.abs(i), Math.abs(j)) === 1 ? 0 : 1);
+  }
+  put(size - 8, 8, 1);                                   // всегда тёмный модуль
+  for (let i = 0; i <= 8; i++) { if (i !== 6) { put(8, i, 0); put(i, 8, 0); } }
+  for (let i = 0; i < 8; i++) { put(8, size - 1 - i, 0); put(size - 1 - i, 8, 0); }
+  if (ver >= 7) {                                        // сведения о версии, BCH(18,6)
+    let rest = ver << 12;
+    for (let i = 17; i >= 12; i--) if ((rest >> i) & 1) rest ^= 0x1F25 << (i - 12);
+    const info = (ver << 12) | rest;
+    for (let i = 0; i < 18; i++) {
+      const bit = (info >> i) & 1;
+      put(Math.floor(i / 3), size - 11 + (i % 3), bit);
+      put(size - 11 + (i % 3), Math.floor(i / 3), bit);
+    }
+  }
+
+  /* --- размещение данных змейкой --- */
+  let bi = 0, up = true;
+  for (let c = size - 1; c > 0; c -= 2) {
+    if (c === 6) c--;
+    for (let k = 0; k < size; k++) {
+      const r = up ? size - 1 - k : k;
+      for (let z = 0; z < 2; z++) {
+        const cc = c - z;
+        if (fix[r][cc]) continue;
+        mod[r][cc] = bi < stream.length * 8 ? (stream[bi >> 3] >> (7 - (bi & 7))) & 1 : 0;
+        bi++;
+      }
+    }
+    up = !up;
+  }
+
+  /* --- маски и выбор лучшей --- */
+  const MASK = [
+    (r, c) => ((r + c) & 1) === 0,
+    (r, c) => (r & 1) === 0,
+    (r, c) => c % 3 === 0,
+    (r, c) => (r + c) % 3 === 0,
+    (r, c) => ((((r / 2) | 0) + ((c / 3) | 0)) & 1) === 0,
+    (r, c) => ((r * c) & 1) + ((r * c) % 3) === 0,
+    (r, c) => (((((r * c) & 1) + ((r * c) % 3))) & 1) === 0,
+    (r, c) => (((((r + c) & 1) + ((r * c) % 3))) & 1) === 0
+  ];
+  const fmtBits = maskId => {                             // сведения о формате, BCH(15,5)
+    const data = (0b00 << 3) | maskId;                   // уровень коррекции M = 00
+    let rest = data << 10;
+    for (let i = 14; i >= 10; i--) if ((rest >> i) & 1) rest ^= 0x537 << (i - 10);
+    return ((data << 10) | rest) ^ 0x5412;
+  };
+  const applyFormat = (m, maskId) => {
+    const f = fmtBits(maskId);
+    const bit = i => (f >> (14 - i)) & 1;                 // старший бит идёт первым
+    for (let i = 0; i <= 5; i++) m[8][i] = bit(i);
+    m[8][7] = bit(6); m[8][8] = bit(7); m[7][8] = bit(8);
+    for (let i = 9; i <= 14; i++) m[14 - i][8] = bit(i);
+    for (let i = 0; i <= 6; i++) m[size - 1 - i][8] = bit(i);   // 7 модулей в столбце
+    for (let i = 7; i <= 14; i++) m[8][size - 15 + i] = bit(i);  // 8 модулей в строке
+    m[size - 8][8] = 1;
+  };
+  const penalty = m => {
+    let p = 0, dark = 0;
+    const line = get => {
+      let run = 1, prev = get(0);
+      for (let i = 1; i < size; i++) {
+        const v = get(i);
+        if (v === prev) { run++; } else { if (run >= 5) p += run - 2; run = 1; prev = v; }
+      }
+      if (run >= 5) p += run - 2;
+    };
+    for (let r = 0; r < size; r++) line(i => m[r][i]);
+    for (let c = 0; c < size; c++) line(i => m[i][c]);
+    for (let r = 0; r < size - 1; r++) for (let c = 0; c < size - 1; c++) {
+      const v = m[r][c];
+      if (v === m[r][c + 1] && v === m[r + 1][c] && v === m[r + 1][c + 1]) p += 3;
+    }
+    const P1 = [1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 0], P2 = [0, 0, 0, 0, 1, 0, 1, 1, 1, 0, 1];
+    const scan = get => {
+      for (let i = 0; i + 10 < size; i++) {
+        let a = true, b = true;
+        for (let j = 0; j < 11; j++) { if (get(i + j) !== P1[j]) a = false; if (get(i + j) !== P2[j]) b = false; }
+        if (a) p += 40; if (b) p += 40;
+      }
+    };
+    for (let r = 0; r < size; r++) scan(i => m[r][i]);
+    for (let c = 0; c < size; c++) scan(i => m[i][c]);
+    for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) dark += m[r][c];
+    p += Math.floor(Math.abs(dark * 100 / (size * size) - 50) / 5) * 10;
+    return p;
+  };
+
+  let best = null, bestScore = Infinity;
+  for (let k = 0; k < 8; k++) {
+    const m = mod.map((row, r) => Array.from(row, (v, c) => fix[r][c] ? v : (MASK[k](r, c) ? v ^ 1 : v)));
+    applyFormat(m, k);
+    const s = penalty(m);
+    if (s < bestScore) { bestScore = s; best = m; }
+  }
+  return best;
+}
+
+/* Готовый SVG нужного размера. Печатается векторно, интернет не нужен. */
+function qrSvg(text, mm) {
+  let m;
+  try { m = qrMatrix(text); }
+  catch (e) { return '<span class="qr-err">' + esc(e.message) + '</span>'; }
+  const n = m.length, q = 4, side = n + q * 2;
+  let path = '';
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++)
+    if (m[r][c]) path += 'M' + (c + q) + ' ' + (r + q) + 'h1v1h-1z';
+  return '<svg viewBox="0 0 ' + side + ' ' + side + '" width="' + mm + 'mm" height="' + mm + 'mm" ' +
+    'shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">' +
+    '<rect width="' + side + '" height="' + side + '" fill="#fff"/>' +
+    '<path d="' + path + '" fill="#000"/></svg>';
 }
 
 /* --------------------------- Загрузка YML --------------------------- */
@@ -732,6 +949,7 @@ function parseFeed(text) {
       picture: pics[0] || '',
       vendor: textOfAny(o, ['vendor', 'brand']),
       vendorCode: textOfAny(o, ['vendorCode', 'barcode', 'article', 'sku', 'mpn']),
+      url: textOfAny(o, ['url', 'link']),
       catId,
       cat: cats.get(catId) || textOfAny(o, ['product_type', 'categoryText']),
       available: o.getAttribute('available') !== 'false',
@@ -955,6 +1173,13 @@ function blockHtml(b, first) {
     </div>`;
   }
   if (b.type === 'spacer') return `<div class="blk spacer" data-id="${b.id}"></div>`;
+  if (b.type === 'qr') {
+    return `<div class="blk qr" data-id="${b.id}">
+      <div class="qr-box" data-act="qrurl" title="Клик — изменить ссылку">${
+        b.url ? qrSvg(b.url, S.sheet.qrSize) : '<span class="qr-err">нажмите, чтобы задать ссылку</span>'}</div>
+      <div class="qr-cap" contenteditable data-bind="caption" data-ph="подпись под кодом…">${esc(b.caption || '')}</div>
+    </div>`;
+  }
   return `<div class="blk item${b === first ? ' isfirst' : ''}" data-id="${b.id}">
     <div class="thumb" data-act="photo" title="Клик — заменить фото">${photoHtml(b.photo, 'ФОТО')}</div>
     <div class="grow" style="min-width:0">
@@ -1057,11 +1282,28 @@ function addItem(offer, opts) {
   opts = opts || {};
   const list = opts.list || activeList();
   const b = offer
-    ? { id: uid(), type: 'item', offerId: offer.id, name: offer.name, price: offer.price, note: '', photo: offer.picture }
-    : { id: uid(), type: 'item', offerId: null, name: '', price: '', note: '', photo: '' };
+    ? { id: uid(), type: 'item', offerId: offer.id, name: offer.name, price: offer.price,
+        note: '', photo: offer.picture, url: offer.url || '' }
+    : { id: uid(), type: 'item', offerId: null, name: '', price: '', note: '', photo: '', url: '' };
   if (opts.first) list.unshift(b); else list.push(b);
   save(); renderSheet();
   if (!offer) focusBlock(b.id, '.i-name');
+}
+/* QR со ссылкой на товар — отдельный блок по центру половины */
+function addQr(opts) {
+  opts = opts || {};
+  const list = opts.list || activeList();
+  const b = { id: uid(), type: 'qr', url: opts.url || '', caption: opts.caption || '' };
+  if (!b.url) {
+    const v = prompt('Ссылка для QR-кода:', 'https://');
+    if (v === null) return;
+    b.url = v.trim();
+  }
+  if (opts.after) {
+    const i = list.findIndex(x => x.id === opts.after);
+    if (i >= 0) list.splice(i + 1, 0, b); else list.push(b);
+  } else list.push(b);
+  save(); renderSheet();
 }
 function addSection(title, list) {
   const b = { id: uid(), type: 'section', title: title || '' };
@@ -1153,10 +1395,19 @@ SHEET.addEventListener('click', e => {
     pickPhoto({ kind: 'block', id: b.id });
     return;
   }
+  const qrBox = e.target.closest('[data-act="qrurl"]');
+  if (qrBox) {                                 // клик по коду — сменить ссылку
+    const b = findBlock(qrBox.closest('.blk').dataset.id);
+    const v = prompt('Ссылка для QR-кода:', b.url || 'https://');
+    if (v !== null) { b.url = v.trim(); save(); renderSheet(); }
+    return;
+  }
   const add = e.target.closest('[data-add]');
   if (add) {
     const list = listOfPanel(add.dataset.p);
-    if (add.dataset.add === 'item') addItem(null, { list }); else addSection('', list);
+    if (add.dataset.add === 'item') addItem(null, { list });
+    else if (add.dataset.add === 'qr') addQr({ list });
+    else addSection('', list);
   }
 });
 
@@ -1255,6 +1506,10 @@ TOOLS.addEventListener('click', e => {
   else if (act === 'up') { move(id, -1); keepTools(id); }
   else if (act === 'down') { move(id, 1); keepTools(id); }
   else if (act === 'photo') pickPhoto({ kind: 'block', id });
+  else if (act === 'qr') {
+    const b = findBlock(id);
+    addQr({ list: listOf(id), after: id, url: b.url || '' });
+  }
   else if (act === 'note') {
     const b = findBlock(id); b._noteOpen = true; save(); renderSheet(); focusBlock(id, '.i-note');
   }
@@ -1353,6 +1608,7 @@ SHEET.addEventListener('drop', e => {
 /* кнопки «+» в верхней панели — в активную половину */
 $('#addItemTop').addEventListener('click', () => addItem(null));
 $('#addSectionTop').addEventListener('click', () => addSection(''));
+$('#addQrTop').addEventListener('click', () => addQr({}));
 
 /* --------------------------- Обработчики: каталог --------------------------- */
 $('#results').addEventListener('click', e => {
@@ -1430,6 +1686,11 @@ bindRange('#pad', 'pad', '#padVal', 1);
 bindRange('#gap', 'gap', '#gapVal', 1);
 bindRange('#th', 'thumb', '#thVal', 0);
 bindRange('#mw', 'mainw', '#mwVal', 0);
+$('#qrSize').addEventListener('input', () => {           // размер задаётся при отрисовке кода
+  S.sheet.qrSize = parseFloat($('#qrSize').value);
+  $('#qrVal').textContent = S.sheet.qrSize;
+  save(); renderSheet();
+});
 
 function setLayout() {
   S.sheet.orient = $('#orient').value;
@@ -1540,6 +1801,7 @@ function syncControls() {
   $('#gap').value = st.gap; $('#gapVal').textContent = st.gap.toFixed(1);
   $('#th').value = st.thumb; $('#thVal').textContent = st.thumb;
   $('#mw').value = st.mainw; $('#mwVal').textContent = st.mainw;
+  $('#qrSize').value = st.qrSize; $('#qrVal').textContent = st.qrSize;
   $('#showPhoto').checked = st.showPhoto;
   $('#showDots').checked = st.showDots;
   $('#cur').value = st.cur;
