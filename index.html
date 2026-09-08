@@ -248,13 +248,14 @@ body.nophoto .thumb{display:none}
     </header>
 
     <nav class="tabs">
-      <button class="tab active" data-tab="catalog">Каталог</button>
+      <button class="tab active" data-tab="feed">Прайс</button>
+      <button class="tab" data-tab="catalog">Каталог</button>
       <button class="tab" data-tab="sheet">Лист</button>
       <button class="tab" data-tab="saves">Шаблоны</button>
     </nav>
 
-    <!-- ---------- Каталог ---------- -->
-    <section class="pane active" id="pane-catalog">
+    <!-- ---------- Подключение прайса ---------- -->
+    <section class="pane active" id="pane-feed">
       <label class="f">Ссылка на YML (прайс-лист)</label>
       <div class="row">
         <input type="url" id="ymlUrl" class="grow" placeholder="https://site.ru/price.yml">
@@ -289,10 +290,19 @@ body.nophoto .thumb{display:none}
         <button class="btn sm" id="loadPaste" style="margin-top:6px">Разобрать</button>
       </details>
 
-      <div id="status" class="status" style="margin-top:10px">Каталог не загружен</div>
+      <div id="status" class="status" style="margin-top:10px">Прайс не подключён</div>
 
       <div class="sep"></div>
+      <button class="btn" id="refreshPrices" style="width:100%">Обновить цены из YML</button>
+      <div class="hint" style="margin-top:6px">
+        Перечитывает прайс по ссылке и подставляет свежие цены в позиции, добавленные
+        из каталога (у них сохранён id оффера).
+      </div>
+    </section>
 
+    <!-- ---------- Каталог ---------- -->
+    <section class="pane" id="pane-catalog">
+      <div id="catInfo" class="status" style="margin-bottom:10px">Прайс не подключён</div>
       <label class="f">Поиск товара (название, артикул, id)</label>
       <input type="text" id="q" placeholder="Введите минимум 2 символа…">
       <div class="row" style="margin-top:6px">
@@ -366,11 +376,6 @@ body.nophoto .thumb{display:none}
         <option value="">без символа</option>
       </select>
 
-      <div class="sep"></div>
-      <button class="btn grow" id="refreshPrices" style="width:100%">Обновить цены из YML</button>
-      <div class="hint" style="margin-top:6px">
-        Обновляются позиции, добавленные из каталога (у них сохранён id оффера).
-      </div>
     </section>
 
     <!-- ---------- Шаблоны ---------- -->
@@ -752,6 +757,18 @@ function parseFeed(text) {
   return { offers, cats, kind, withPrice };
 }
 
+function setCatInfo() {
+  const el = $('#catInfo');
+  if (CATALOG.offers.length) {
+    el.className = 'status ok';
+    el.textContent = 'Прайс подключён: товаров ' + CATALOG.offers.length +
+      ', валюта ' + (curSymbol() || CATALOG.currency || '—');
+  } else {
+    el.className = 'status warn';
+    el.innerHTML = 'Прайс не подключён. <a href="#" data-goto="feed">Перейти на вкладку «Прайс»</a>';
+  }
+}
+
 function applyCatalog(data, sourceLabel) {
   const { offers, cats } = data;
   CATALOG.offers = offers;
@@ -770,14 +787,15 @@ function applyCatalog(data, sourceLabel) {
     (used.size ? ', категорий: ' + used.size : '') +
     '. Валюта: ' + (CATALOG.currency || '—') +
     (sourceLabel ? '. Источник: ' + esc(sourceLabel) : ''), 'ok');
+  setCatInfo();
   renderSheet();
   doSearch();
 }
 
 /* Разбор текста из файла или из поля вставки */
 function parseYml(text, label) {
-  try { applyCatalog(parseFeed(text), label); }
-  catch (e) { setStatus('Файл не подошёл: ' + esc(e.message), 'err'); }
+  try { applyCatalog(parseFeed(text), label); return true; }
+  catch (e) { setStatus('Файл не подошёл: ' + esc(e.message), 'err'); return false; }
 }
 
 /* --------------------------- Поиск по каталогу --------------------------- */
@@ -786,7 +804,10 @@ function doSearch() {
   const box = $('#results');
   const q = $('#q').value.trim().toLowerCase();
   const cat = $('#catFilter').value;
-  if (!CATALOG.offers.length) { box.innerHTML = ''; return; }
+  if (!CATALOG.offers.length) {
+    box.innerHTML = '<div class="hint">Сначала подключите прайс на вкладке «Прайс».</div>';
+    return;
+  }
   if (q.length < 2 && !cat) {
     box.innerHTML = '<div class="hint">Введите запрос или выберите категорию.</div>';
     return;
@@ -1336,8 +1357,11 @@ $('#results').addEventListener('click', e => {
 $('#q').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(doSearch, 150); });
 $('#catFilter').addEventListener('change', doSearch);
 
-$('#loadUrl').addEventListener('click', () => fetchYml($('#ymlUrl').value.trim()));
-$('#ymlUrl').addEventListener('keydown', e => { if (e.key === 'Enter') fetchYml($('#ymlUrl').value.trim()); });
+async function loadUrlAndGo() {
+  if (await fetchYml($('#ymlUrl').value.trim())) goTab('catalog');
+}
+$('#loadUrl').addEventListener('click', loadUrlAndGo);
+$('#ymlUrl').addEventListener('keydown', e => { if (e.key === 'Enter') loadUrlAndGo(); });
 $('#proxy').addEventListener('change', () => {
   S.yml.proxy = $('#proxy').value;
   $('#proxyCustom').style.display = S.yml.proxy === 'custom' ? 'block' : 'none';
@@ -1353,12 +1377,13 @@ $('#ymlFile').addEventListener('change', async e => {
       buf = await new Response(new Blob([b]).stream()
         .pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
     }
-    parseYml(decodeFeed(buf), 'файл ' + f.name);
+    if (parseYml(decodeFeed(buf), 'файл ' + f.name)) goTab('catalog');
   } catch (err) { setStatus('Файл не прочитан: ' + esc(err.message), 'err'); }
 });
 $('#loadPaste').addEventListener('click', () => {
   const t = $('#ymlPaste').value.trim();
-  if (t) parseYml(t, 'вставленный текст'); else setStatus('Пустое поле', 'err');
+  if (!t) { setStatus('Пустое поле', 'err'); return; }
+  if (parseYml(t, 'вставленный текст')) goTab('catalog');
 });
 
 $('#refreshPrices').addEventListener('click', async () => {
@@ -1414,10 +1439,15 @@ $('#showDots').addEventListener('change', () => { S.sheet.showDots = $('#showDot
 $('#cur').addEventListener('change', () => { S.sheet.cur = $('#cur').value; save(); renderSheet(); doSearch(); });
 
 /* вкладки */
-$$('.tab').forEach(t => t.addEventListener('click', () => {
-  $$('.tab').forEach(x => x.classList.toggle('active', x === t));
-  $$('.pane').forEach(p => p.classList.toggle('active', p.id === 'pane-' + t.dataset.tab));
-}));
+function goTab(name) {
+  $$('.tab').forEach(x => x.classList.toggle('active', x.dataset.tab === name));
+  $$('.pane').forEach(p => p.classList.toggle('active', p.id === 'pane-' + name));
+}
+$$('.tab').forEach(t => t.addEventListener('click', () => goTab(t.dataset.tab)));
+document.addEventListener('click', e => {
+  const link = e.target.closest('[data-goto]');
+  if (link) { e.preventDefault(); goTab(link.dataset.goto); }
+});
 
 /* масштаб и печать */
 $('#zoomIn').addEventListener('click', () => { S.zoom = Math.min(2, (S.zoom || currentZoom()) + .1); applyZoom(); save(); });
@@ -1514,7 +1544,10 @@ syncControls();
 applyGeometry();
 renderSheet();
 renderSaves();
-if (S.yml.url) fetchYml(S.yml.url, true);
+setCatInfo();
+doSearch();
+// ссылка сохранена — подтягиваем прайс и сразу открываем каталог
+if (S.yml.url) fetchYml(S.yml.url, true).then(ok => { if (ok) goTab('catalog'); });
 </script>
 </body>
 </html>
