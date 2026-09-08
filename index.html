@@ -116,16 +116,22 @@ label.f{display:block;font-size:12px;color:var(--muted);margin:0 0 3px}
 }
 .panel[hidden]{display:none}
 .panel.overflow{outline:1.2mm solid rgba(220,38,38,.5);outline-offset:-1.2mm}
-@media screen{
-  /* активная половина — в неё попадают товары из каталога */
-  #sheet.two .panel.active::after{
-    content:"сюда добавляются товары";
-    position:absolute;left:0;right:0;top:0;text-align:center;
-    font-size:2.6mm;letter-spacing:.2mm;color:#93c5fd;pointer-events:none
-  }
-  #sheet.two .panel{cursor:pointer}
-  #sheet.two .panel.active{background:#fbfdff}
+/* Переключатель «сюда добавляются товары» — только на экране, поверх листа,
+   поэтому на раскладку и печать он не влияет. */
+.pick{
+  position:absolute;left:0;right:0;top:1.5mm;z-index:3;
+  display:none;justify-content:center;align-items:center;gap:6px;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif
 }
+.pick > span{
+  display:inline-flex;align-items:center;gap:6px;cursor:pointer;
+  background:rgba(255,255,255,.94);border:1px solid #d9dce1;border-radius:99px;
+  padding:3px 10px;font-size:12px;color:#6b7280;box-shadow:0 1px 4px rgba(0,0,0,.06)
+}
+.pick input{margin:0;cursor:pointer}
+.panel.active .pick > span{border-color:#2563eb;color:#1d4ed8;background:#eff6ff;font-weight:600}
+#sheet.two .pick,#sheet.flow .pick{display:flex}
+@media screen{ .panel.active{background:#fbfdff} }
 
 /* фото первого товара — крупно сверху */
 .main-block{flex:none;text-align:center;margin:0 0 2mm}
@@ -226,7 +232,7 @@ body.nophoto .thumb{display:none}
   }
   #panel.overflow{outline:none}
   #sheet .fold{display:var(--foldprint,none)}
-  #sheet .panel::after{display:none !important}
+  #sheet .pick{display:none !important}
   #sheet .panel.active{background:none !important}
   [contenteditable]:empty::before{content:"" !important}
   .thumb,.main-photo{background:var(--ph)}
@@ -386,8 +392,9 @@ body.nophoto .thumb{display:none}
       <div class="sep"></div>
       <button class="btn" id="clearAll" style="width:100%;color:#b91c1c">Очистить лист</button>
       <div class="hint" style="margin-top:10px">
-        Всё хранится в браузере (localStorage). Файл можно скопировать на флешку и открыть
-        на другом компьютере — установка и сервер не нужны.
+        <b>Список товаров не сохраняется между сеансами:</b> при перезагрузке страницы лист
+        открывается чистым. Чтобы вернуться к прайсу позже, сохраните его шаблоном
+        или выгрузите в файл. Настройки листа и ссылка на YML запоминаются.
       </div>
     </section>
   </aside>
@@ -418,6 +425,8 @@ body.nophoto .thumb{display:none}
         <div class="halfmark" id="halfmark">вторая половина листа — не используется</div>
 
         <div class="panel" id="panelA" data-p="A">
+          <label class="pick"><span><input type="radio" name="pickPanel" value="A">
+            <b data-picklabel>заполняется эта половина</b></span></label>
           <div class="main-block" data-main="A" title="Фото первого товара в списке. Клик — заменить своим файлом">
             <div class="main-photo" id="mainPhotoA"><span class="ph">ФОТО</span></div>
           </div>
@@ -431,6 +440,8 @@ body.nophoto .thumb{display:none}
         </div>
 
         <div class="panel" id="panelB" data-p="B" hidden>
+          <label class="pick"><span><input type="radio" name="pickPanel" value="B">
+            <b data-picklabel>заполняется эта половина</b></span></label>
           <div class="main-block" data-main="B" title="Фото первого товара второй половины. Клик — заменить своим файлом">
             <div class="main-photo" id="mainPhotoB"><span class="ph">ФОТО</span></div>
           </div>
@@ -494,9 +505,17 @@ let S = {
 
 let CATALOG = { offers: [], byId: new Map(), cats: new Map(), currency: '' };
 
+/* Между сессиями храним только настройки: раскладку листа, размеры, ссылку на
+   прайс. Сами товары не переживают перезагрузку — лист всегда открывается
+   чистым, а нужный список сохраняется вручную во вкладке «Шаблоны». */
 function save() {
-  try { localStorage.setItem(LS_STATE, JSON.stringify(S)); }
-  catch (e) { console.warn('Не удалось сохранить состояние', e); }
+  try {
+    const keep = Object.assign({}, S, {
+      sheet: Object.assign({}, S.sheet, { blocks: [], blocks2: [] }),
+      active: 'A'
+    });
+    localStorage.setItem(LS_STATE, JSON.stringify(keep));
+  } catch (e) { console.warn('Не удалось сохранить настройки', e); }
 }
 /* Приводит лист любого возраста к текущей схеме. */
 function migrateSheet(src) {
@@ -941,11 +960,26 @@ function renderSheet() {
   $('#mainPhotoB').innerHTML = photoHtml(firstB ? firstB.photo : '', 'ФОТО');
   $('[data-main="B"]').hidden = !twoLists;                  // при перетекании фото одно, вверху
 
-  $$('.panel').forEach(el => el.classList.toggle('active', twoLists && el.dataset.p === S.active));
+  syncPicks();
 
   reflow();
   if (!TOOLS.hidden && !$(`.blk[data-id="${toolsId}"]`)) hideTools(true);
   checkOverflow();
+}
+
+/* Подписи и состояние переключателя половин */
+function syncPicks() {
+  const flow = S.sheet.mode === 'flow';
+  $$('.panel').forEach(el => {
+    const p = el.dataset.p;
+    const on = flow ? p === 'A' : p === S.active;
+    el.classList.toggle('active', on && S.sheet.mode !== 'one');
+    const inp = $('.pick input', el); if (inp) inp.checked = on;
+    const lab = $('[data-picklabel]', el);
+    if (lab) lab.textContent = flow
+      ? (p === 'A' ? 'список начинается здесь' : 'продолжение списка — нажмите, чтобы заполнять отдельно')
+      : (on ? 'заполняется эта половина' : 'заполнять эту половину');
+  });
 }
 
 /* Перенос хвоста списка во вторую половину («перетекание») */
@@ -1060,12 +1094,29 @@ function compress(file, maxSide = 520, quality = .82) {
 /* --------------------------- Обработчики: лист --------------------------- */
 const SHEET = $('#sheet');
 
-/* выбор активной половины (режим двух прайсов) */
+/* Выбор половины, которая заполняется сейчас. В режиме перетекания список
+   один, поэтому выбор второй половины переводит лист в режим двух прайсов. */
+function setActivePanel(p) {
+  if (S.sheet.mode === 'one') return;
+  if (S.sheet.mode === 'flow') {
+    if (p !== 'B') { syncPicks(); return; }
+    S.sheet.mode = 'two';                       // половины становятся независимыми
+    $('#mode').value = 'two';
+    $('#halfRow').style.display = 'none';
+    S.active = 'B'; save(); applyGeometry(); renderSheet();
+    return;
+  }
+  S.active = p; save(); renderSheet();
+}
+SHEET.addEventListener('change', e => {
+  const inp = e.target.closest('.pick input');
+  if (inp) setActivePanel(inp.value);
+});
 SHEET.addEventListener('mousedown', e => {
   const pan = e.target.closest('.panel');
   if (!pan || S.sheet.mode !== 'two' || pan.dataset.p === S.active) return;
-  S.active = pan.dataset.p; save();
-  $$('.panel').forEach(el => el.classList.toggle('active', el.dataset.p === S.active));
+  if (e.target.closest('.pick')) return;        // радиокнопка отработает сама
+  setActivePanel(pan.dataset.p);
 });
 
 SHEET.addEventListener('click', e => {
@@ -1352,6 +1403,7 @@ function setLayout() {
   S.sheet.mode = $('#mode').value;
   S.sheet.half = $('#half').value;
   if (S.sheet.mode !== 'two') S.active = 'A';
+  syncPicks();
   $('#halfRow').style.display = S.sheet.mode === 'one' ? 'flex' : 'none';
   save(); applyGeometry(); renderSheet();
 }
