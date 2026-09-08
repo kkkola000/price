@@ -179,14 +179,14 @@ body.nophoto .thumb{display:none}
 /* Панель кнопок позиции — вне листа (position:fixed), поэтому её не режет
    overflow панели и не мельчит масштаб просмотра. */
 #blkTools{
-  position:fixed;z-index:50;display:flex;gap:2px;background:#fff;
+  position:fixed;z-index:50;display:flex;flex-direction:column;gap:1px;background:#fff;
   border:1px solid var(--line);border-radius:7px;padding:3px;
   box-shadow:0 3px 14px rgba(0,0,0,.18)
 }
 #blkTools[hidden]{display:none}
 #blkTools button{
-  border:0;background:transparent;border-radius:5px;width:28px;height:28px;
-  font-size:14px;line-height:1;color:#374151;display:flex;align-items:center;justify-content:center
+  border:0;background:transparent;border-radius:5px;width:26px;height:26px;
+  font-size:13px;line-height:1;color:#374151;display:flex;align-items:center;justify-content:center
 }
 #blkTools button:hover{background:#eef0f3}
 #blkTools button.del:hover{background:#fee2e2;color:#b91c1c}
@@ -911,7 +911,8 @@ function applyZoom() {
   let z = S.zoom;
   if (!z) {
     const stage = $('#stage');
-    const availW = stage.clientWidth - 48;
+    const GUTTER = 44;                        // поле под всплывающие кнопки строки
+    const availW = stage.clientWidth - 48 - GUTTER * 2;
     const availH = stage.clientHeight - 130;
     const mm = 96 / 25.4;                       // CSS-пиксели в 1 мм
     z = Math.min(availW / (g.sw * mm), availH / (g.sh * mm), 1.6);
@@ -1214,17 +1215,14 @@ function showTools(blk) {
   const sr = SHEET.getBoundingClientRect();
   const pr = blk.closest('.panel').getBoundingClientRect();
   const tw = TOOLS.offsetWidth, th = TOOLS.offsetHeight;
-  const GAP = 10;
+  const GAP = 6;
   // Кнопки ставим вплотную к листу — с той его стороны, которая ближе к строке,
   // и всегда снаружи, чтобы не закрывать товары соседней половины.
-  const st = $('#stage').getBoundingClientRect();
   const nearLeft = (pr.left - sr.left) <= (sr.right - pr.right);
+  // Панель всегда за пределами листа, со стороны своей половины: так она не
+  // закрывает ни цену с названием, ни соседнюю половину. Место под неё
+  // резервируется при вписывании листа в окно (см. applyZoom).
   let left = nearLeft ? sr.left - tw - GAP : sr.right + GAP;
-  // снаружи ставим, только если хватает свободного поля рядом с листом,
-  // иначе прижимаем к внешнему краю своей половины — на соседнюю не заезжаем
-  if (left < st.left + 4 || left + tw > st.right - 4) {
-    left = nearLeft ? pr.left + 4 : pr.right - tw - 4;
-  }
   TOOLS.style.left = Math.round(Math.min(innerWidth - tw - 6, Math.max(6, left))) + 'px';
   TOOLS.style.top = Math.round(Math.min(innerHeight - th - 6,
     Math.max(6, r.top + r.height / 2 - th / 2))) + 'px';
