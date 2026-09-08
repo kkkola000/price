@@ -258,18 +258,22 @@ body.nophoto .thumb{display:none}
       </div>
 
       <div class="row" style="margin-top:6px">
-        <select id="proxy" class="grow" title="Обход CORS">
-          <option value="">Без прокси (прямой запрос)</option>
-          <option value="https://api.allorigins.win/raw?url=">allorigins.win</option>
-          <option value="https://corsproxy.io/?url=">corsproxy.io</option>
-          <option value="https://r.jina.ai/">r.jina.ai</option>
+        <select id="proxy" class="grow" title="Способ загрузки">
+          <option value="">Автоматически: напрямую, затем через ретранслятор</option>
+          <option value="none">Только прямой запрос</option>
+          <option value="allorigins.win">Ретранслятор allorigins.win</option>
+          <option value="corsproxy.io">Ретранслятор corsproxy.io</option>
+          <option value="codetabs.com">Ретранслятор codetabs.com</option>
+          <option value="thingproxy">Ретранслятор thingproxy</option>
+          <option value="r.jina.ai">Ретранслятор r.jina.ai</option>
           <option value="custom">Свой прокси…</option>
         </select>
       </div>
-      <input type="url" id="proxyCustom" placeholder="https://my-proxy/?url=" style="margin-top:6px;display:none">
+      <input type="url" id="proxyCustom" placeholder="https://мой-прокси/?url=  или  …/{url}" style="margin-top:6px;display:none">
       <div class="hint" style="margin-top:6px">
-        Если сайт не отдаёт CORS-заголовки, браузер заблокирует прямой запрос — выберите прокси
-        либо загрузите файл вручную.
+        Ссылка открывается в браузере, но не грузится здесь — это <b>CORS</b>: сайт не разрешает
+        забирать файл со страницы. Панель сама пробует обходные пути; если все закрыты,
+        сохраните файл по ссылке (Ctrl+S) и загрузите его кнопкой ниже.
       </div>
 
       <div class="row" style="margin-top:8px">
@@ -552,90 +556,211 @@ function fmtPrice(v) {
 }
 
 /* --------------------------- Загрузка YML --------------------------- */
-function proxyUrl(url) {
-  let p = S.yml.proxy;
-  if (p === 'custom') p = S.yml.proxyCustom || '';
-  if (!p) return url;
-  return p.includes('=') || p.endsWith('?') ? p + encodeURIComponent(url) : p + url;
+/* Прайс с чужого сайта браузер отдаёт только если сервер разрешил CORS.
+   Поэтому ссылку пробуем сначала напрямую, а затем через публичные
+   ретрансляторы — какой сработал, видно в строке состояния. */
+const PROXIES = [
+  { name: 'allorigins.win', build: u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u) },
+  { name: 'corsproxy.io',   build: u => 'https://corsproxy.io/?url=' + encodeURIComponent(u) },
+  { name: 'codetabs.com',   build: u => 'https://api.codetabs.com/v1/proxy/?quest=' + encodeURIComponent(u) },
+  { name: 'thingproxy',     build: u => 'https://thingproxy.freeboard.io/fetch/' + u },
+  { name: 'r.jina.ai',      build: u => 'https://r.jina.ai/' + u }
+];
+
+function customProxy(u) {
+  const t = (S.yml.proxyCustom || '').trim();
+  if (!t) return null;
+  return t.includes('{url}') ? t.replace('{url}', encodeURIComponent(u))
+       : (t.includes('=') || t.endsWith('?')) ? t + encodeURIComponent(u)
+       : t + u;
+}
+
+/* Список попыток по текущей настройке «прокси» */
+function routes(url) {
+  const p = S.yml.proxy;
+  if (p === 'custom') {
+    const c = customProxy(url);
+    return c ? [{ name: 'свой прокси', url: c }] : [];
+  }
+  if (p === 'none') return [{ name: 'напрямую', url }];
+  if (p) {
+    const one = PROXIES.find(x => x.name === p);
+    if (one) return [{ name: one.name, url: one.build(url) }];
+  }
+  // «Автоматически»: сначала прямой запрос, потом ретрансляторы
+  return [{ name: 'напрямую', url }].concat(PROXIES.map(x => ({ name: x.name, url: x.build(url) })));
 }
 
 function setStatus(text, cls) {
   const el = $('#status');
   el.className = 'status' + (cls ? ' ' + cls : '');
-  el.textContent = text;
+  el.innerHTML = text;
+}
+
+/* Декодируем с учётом объявленной кодировки: у многих прайсов windows-1251 */
+function decodeFeed(buf) {
+  const bytes = new Uint8Array(buf);
+  const head = String.fromCharCode(...bytes.slice(0, 300));
+  let enc = (head.match(/encoding\s*=\s*["']([\w-]+)["']/i) || [, 'utf-8'])[1].toLowerCase();
+  if (/^(cp|win|windows)-?1251$/.test(enc)) enc = 'windows-1251';
+  if (bytes[0] === 0xEF && bytes[1] === 0xBB) enc = 'utf-8';           // BOM
+  try { return new TextDecoder(enc).decode(bytes); }
+  catch (e) { return new TextDecoder('utf-8').decode(bytes); }
+}
+
+async function readBody(res) {
+  let buf = await res.arrayBuffer();
+  if (!buf.byteLength) throw new Error('сервер вернул 0 байт');
+  const b = new Uint8Array(buf);
+  if (b[0] === 0x1f && b[1] === 0x8b) {                                 // .yml.gz
+    if (!('DecompressionStream' in window)) throw new Error('файл сжат gzip — распакуйте его и загрузите вручную');
+    const ds = new DecompressionStream('gzip');
+    buf = await new Response(new Blob([b]).stream().pipeThrough(ds)).arrayBuffer();
+  }
+  return decodeFeed(buf);
+}
+
+function looksLikeHtml(t) {
+  const h = t.slice(0, 400).toLowerCase();
+  return h.includes('<!doctype html') || (h.includes('<html') && !h.includes('<yml_catalog'));
 }
 
 async function fetchYml(url, silent) {
-  if (!url) { if (!silent) setStatus('Укажите ссылку на YML', 'err'); return; }
-  setStatus('Загрузка…');
-  try {
-    const res = await fetch(proxyUrl(url), { redirect: 'follow' });
-    if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + res.statusText);
-    const text = await res.text();
-    parseYml(text);
-    S.yml.url = url; save();
-  } catch (e) {
-    setStatus('Ошибка загрузки: ' + e.message +
-      '. Часто это блокировка CORS — выберите прокси или загрузите файл вручную.', 'err');
+  url = (url || '').trim();
+  if (!url) { if (!silent) setStatus('Укажите ссылку на YML', 'err'); return false; }
+  if (!/^https?:/i.test(url)) url = 'https://' + url;
+
+  const list = routes(url);
+  if (!list.length) { setStatus('Укажите адрес своего прокси', 'err'); return false; }
+
+  const log = [];
+  for (const r of list) {
+    setStatus('Загрузка (' + esc(r.name) + ')…');
+    try {
+      const res = await fetch(r.url, { redirect: 'follow', credentials: 'omit' });
+      if (!res.ok) throw new Error('ответ HTTP ' + res.status);
+      const text = await readBody(res);
+      if (!text.trim()) throw new Error('пустой ответ');
+      if (looksLikeHtml(text)) throw new Error('вместо прайса пришла HTML-страница (нужна прямая ссылка на файл)');
+      // большой прайс разбирается заметное время — сначала даём отрисоваться статусу
+      setStatus('Разбор прайса (' + Math.round(text.length / 1024) + ' КБ)…');
+      await new Promise(r => setTimeout(r, 0));
+      const data = parseFeed(text);                                     // бросит исключение, если не прайс
+      applyCatalog(data, r.name);
+      S.yml.url = url; save();
+      $('#ymlUrl').value = url;
+      return true;
+    } catch (e) {
+      const msg = (e && e.message) || String(e);
+      log.push('<b>' + esc(r.name) + '</b>: ' + esc(msg === 'Failed to fetch'
+        ? 'запрос заблокирован (CORS или сеть)' : msg));
+    }
   }
+  setStatus('Не удалось загрузить прайс.<br>' + log.join('<br>') +
+    '<br><br>Что делать: скачайте файл по ссылке в браузере и загрузите его кнопкой ' +
+    '«Выберите файл» ниже — это работает всегда.', 'err');
+  return false;
 }
 
+/* --------------------------- Разбор прайса --------------------------- */
 function textOf(parent, tag) {
   const el = parent.getElementsByTagName(tag)[0];
   return el ? el.textContent.trim() : '';
 }
+/* тег без учёта пространства имён: g:price, product:price и т.п. */
+function textOfAny(parent, names) {
+  for (const n of names) {
+    const direct = parent.getElementsByTagName(n)[0];
+    if (direct) return direct.textContent.trim();
+    for (const el of parent.children) {
+      if (el.localName.toLowerCase() === n.toLowerCase()) return el.textContent.trim();
+    }
+  }
+  return '';
+}
+const cleanPrice = v => String(v || '').replace(/[^\d.,]/g, '').replace(',', '.').replace(/\.(?=.*\.)/g, '');
 
-function parseYml(text) {
+/* Понимает YML Яндекса (<offer>) и товарные RSS/Merchant-фиды (<item>). */
+function parseFeed(text) {
   const doc = new DOMParser().parseFromString(text, 'application/xml');
   const perr = doc.getElementsByTagName('parsererror')[0];
-  if (perr) { setStatus('XML не разобран: ' + perr.textContent.trim().slice(0, 160), 'err'); return; }
+  if (perr) {
+    const detail = perr.textContent.replace(/\s+/g, ' ').trim().slice(0, 140);
+    throw new Error('XML не разобран (' + detail + ')');
+  }
 
   const cats = new Map();
-  [...doc.getElementsByTagName('category')].forEach(c => {
+  for (const c of doc.getElementsByTagName('category')) {
     const id = c.getAttribute('id');
     if (id) cats.set(id, c.textContent.trim());
-  });
+  }
+
+  let nodes = [...doc.getElementsByTagName('offer')];
+  const kind = nodes.length ? 'offer' : 'item';
+  if (!nodes.length) nodes = [...doc.getElementsByTagName('item')];
+  if (!nodes.length) throw new Error('в файле нет ни <offer>, ни <item> — это не товарный прайс');
 
   const offers = [];
-  const nodes = doc.getElementsByTagName('offer');
   for (const o of nodes) {
     const pics = [...o.getElementsByTagName('picture')].map(p => p.textContent.trim()).filter(Boolean);
-    const name = textOf(o, 'name') ||
+    if (!pics.length) {
+      const alt = textOfAny(o, ['image_link', 'image', 'photo', 'enclosure']) ||
+        (o.getElementsByTagName('enclosure')[0] || {}).getAttribute?.('url') || '';
+      if (alt) pics.push(alt);
+    }
+    const name = textOf(o, 'name') || textOfAny(o, ['title']) ||
       [textOf(o, 'typePrefix'), textOf(o, 'vendor'), textOf(o, 'model')].filter(Boolean).join(' ').trim();
     const catId = textOf(o, 'categoryId');
+    const price = cleanPrice(textOfAny(o, ['price', 'sale_price']));
+    const cur = textOfAny(o, ['currencyId', 'currency']) ||
+      (textOfAny(o, ['price']).match(/[A-Z]{3}/) || [''])[0];
     offers.push({
-      id: o.getAttribute('id') || textOf(o, 'vendorCode') || String(offers.length + 1),
+      id: o.getAttribute('id') || textOfAny(o, ['id', 'offer_id', 'vendorCode', 'guid']) || String(offers.length + 1),
       name: name || '(без названия)',
-      price: textOf(o, 'price'),
-      oldPrice: textOf(o, 'oldprice'),
-      currency: textOf(o, 'currencyId'),
+      price,
+      oldPrice: cleanPrice(textOfAny(o, ['oldprice', 'old_price'])),
+      currency: cur,
       picture: pics[0] || '',
-      vendor: textOf(o, 'vendor'),
-      vendorCode: textOf(o, 'vendorCode') || textOf(o, 'barcode'),
+      vendor: textOfAny(o, ['vendor', 'brand']),
+      vendorCode: textOfAny(o, ['vendorCode', 'barcode', 'article', 'sku', 'mpn']),
       catId,
-      cat: cats.get(catId) || '',
+      cat: cats.get(catId) || textOfAny(o, ['product_type', 'categoryText']),
       available: o.getAttribute('available') !== 'false',
       _s: ''
     });
   }
   offers.forEach(o => { o._s = (o.name + ' ' + o.vendor + ' ' + o.vendorCode + ' ' + o.id).toLowerCase(); });
+  const withPrice = offers.filter(o => o.price).length;
+  if (!withPrice) throw new Error('найдено ' + offers.length + ' товаров, но ни у одного нет цены');
+  return { offers, cats, kind, withPrice };
+}
 
+function applyCatalog(data, sourceLabel) {
+  const { offers, cats } = data;
   CATALOG.offers = offers;
   CATALOG.byId = new Map(offers.map(o => [o.id, o]));
   CATALOG.cats = cats;
   CATALOG.currency = (offers.find(o => o.currency) || {}).currency || 'RUB';
 
-  const sel = $('#catFilter');
   const used = new Map();
-  offers.forEach(o => { if (o.cat) used.set(o.catId, o.cat); });
-  sel.innerHTML = '<option value="">Все категории (' + offers.length + ')</option>' +
+  offers.forEach(o => { if (o.cat && o.catId) used.set(o.catId, o.cat); });
+  $('#catFilter').innerHTML = '<option value="">Все категории (' + offers.length + ')</option>' +
     [...used.entries()].sort((a, b) => a[1].localeCompare(b[1], 'ru'))
       .map(([id, n]) => '<option value="' + esc(id) + '">' + esc(n) + '</option>').join('');
 
-  setStatus('Загружено предложений: ' + offers.length +
-    (used.size ? ', категорий: ' + used.size : '') + '. Валюта: ' + (CATALOG.currency || '—'), 'ok');
+  setStatus('Загружено товаров: ' + offers.length +
+    (data.withPrice < offers.length ? ' (с ценой: ' + data.withPrice + ')' : '') +
+    (used.size ? ', категорий: ' + used.size : '') +
+    '. Валюта: ' + (CATALOG.currency || '—') +
+    (sourceLabel ? '. Источник: ' + esc(sourceLabel) : ''), 'ok');
   renderSheet();
   doSearch();
+}
+
+/* Разбор текста из файла или из поля вставки */
+function parseYml(text, label) {
+  try { applyCatalog(parseFeed(text), label); }
+  catch (e) { setStatus('Файл не подошёл: ' + esc(e.message), 'err'); }
 }
 
 /* --------------------------- Поиск по каталогу --------------------------- */
@@ -1170,16 +1295,21 @@ $('#proxy').addEventListener('change', () => {
   save();
 });
 $('#proxyCustom').addEventListener('input', () => { S.yml.proxyCustom = $('#proxyCustom').value.trim(); save(); });
-$('#ymlFile').addEventListener('change', e => {
+$('#ymlFile').addEventListener('change', async e => {
   const f = e.target.files[0]; if (!f) return;
-  const fr = new FileReader();
-  fr.onload = () => parseYml(fr.result);
-  fr.onerror = () => setStatus('Файл не прочитан', 'err');
-  fr.readAsText(f, 'utf-8');
+  try {
+    let buf = await f.arrayBuffer();
+    const b = new Uint8Array(buf);
+    if (b[0] === 0x1f && b[1] === 0x8b && 'DecompressionStream' in window) {
+      buf = await new Response(new Blob([b]).stream()
+        .pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+    }
+    parseYml(decodeFeed(buf), 'файл ' + f.name);
+  } catch (err) { setStatus('Файл не прочитан: ' + esc(err.message), 'err'); }
 });
 $('#loadPaste').addEventListener('click', () => {
   const t = $('#ymlPaste').value.trim();
-  if (t) parseYml(t); else setStatus('Пустое поле', 'err');
+  if (t) parseYml(t, 'вставленный текст'); else setStatus('Пустое поле', 'err');
 });
 
 $('#refreshPrices').addEventListener('click', async () => {
